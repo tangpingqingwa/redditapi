@@ -1,0 +1,94 @@
+{
+  "json": {
+    "data": {
+      "things": [
+        {
+          "kind": "t1",
+          "data": {
+            "id": "exp1",
+            "name": "t1_exp1",
+            "parent_id": "t1_root1",
+            "author": "exp",
+            "body": "expanded one",
+            "score": 4,
+            "created_utc": 1700001300,
+            "distinguished": null,
+            "replies": ""
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "id": "exp2",
+            "name": "t1_exp2",
+            "parent_id": "t1_root1",
+            "author": "exp",
+            "body": "expanded two",
+            "score": 3,
+            "created_utc": 1700001400,
+            "distinguished": null,
+            "replies": ""
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "id": "exp3",
+            "name": "t1_exp3",
+            "parent_id": "t1_root1",
+            "author": "exp",
+            "body": "expanded three",
+            "score": 2,
+            "created_utc": 1700001500,
+            "distinguished": null,
+            "replies": ""
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "id": "exp4",
+            "name": "t1_exp4",
+            "parent_id": "t1_root1",
+            "author": "exp",
+            "body": "expanded four",
+            "score": 1,
+            "created_utc": 1700001600,
+            "distinguished": null,
+            "replies": {
+              "kind": "Listing",
+              "data": {
+                "children": [
+                  {
+                    "kind": "more",
+                    "data": {
+                      "count": 1,
+                      "children": ["exp5"],
+                      "parent_id": "t1_exp4",
+                      "id": "morenest",
+                      "name": "t1_morenest"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "id": "exp5",
+            "name": "t1_exp5",
+            "parent_id": "t1_exp4",
+            "author": "late",
+            "body": "second-wave expand",
+            "score": 1,
+            "created_utc": 1700001700,
+            "distinguished": null,
+            "replies": ""
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,81 @@
+[
+  {
+    "kind": "Listing",
+    "data": {
+      "children": [
+        {
+          "kind": "t3",
+          "data": {
+            "id": "del1",
+            "name": "t3_del1",
+            "subreddit": "test",
+            "title": "Deleted child",
+            "author": "op",
+            "selftext": "Some comments are gone",
+            "url": "https://www.reddit.com/r/test/comments/del1/deleted_child/",
+            "permalink": "/r/test/comments/del1/deleted_child/",
+            "score": 6,
+            "created_utc": 1700002000,
+            "over_18": false,
+            "spoiler": true,
+            "locked": true,
+            "link_flair_text": null
+          }
+        }
+      ]
+    }
+  },
+  {
+    "kind": "Listing",
+    "data": {
+      "children": [
+        {
+          "kind": "t1",
+          "data": {
+            "id": "keep1",
+            "name": "t1_keep1",
+            "author": "visible_user",
+            "body": "Still here",
+            "score": 7,
+            "created_utc": 1700002100,
+            "distinguished": null,
+            "replies": {
+              "kind": "Listing",
+              "data": {
+                "children": [
+                  {
+                    "kind": "t1",
+                    "data": {
+                      "id": "goneuser",
+                      "name": "t1_goneuser",
+                      "author": "[deleted]",
+                      "body": "[deleted]",
+                      "score": 0,
+                      "created_utc": 1700002200,
+                      "distinguished": null,
+                      "replies": ""
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "id": "modgone",
+            "name": "t1_modgone",
+            "author": "was_here",
+            "body": "[removed]",
+            "score": 1,
+            "score_hidden": true,
+            "created_utc": 1700002300,
+            "distinguished": "admin",
+            "replies": ""
+          }
+        }
+      ]
+    }
+  }
+]

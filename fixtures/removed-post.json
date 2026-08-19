@@ -1,0 +1,35 @@
+[
+  {
+    "kind": "Listing",
+    "data": {
+      "children": [
+        {
+          "kind": "t3",
+          "data": {
+            "id": "gone1",
+            "name": "t3_gone1",
+            "subreddit": "test",
+            "title": "[removed]",
+            "author": "[deleted]",
+            "selftext": "[removed]",
+            "removed_by_category": "moderator",
+            "url": "https://www.reddit.com/r/test/comments/gone1/removed/",
+            "permalink": "/r/test/comments/gone1/removed/",
+            "score": 0,
+            "created_utc": 1700003000,
+            "over_18": false,
+            "spoiler": false,
+            "locked": true,
+            "link_flair_text": null
+          }
+        }
+      ]
+    }
+  },
+  {
+    "kind": "Listing",
+    "data": {
+      "children": []
+    }
+  }
+]

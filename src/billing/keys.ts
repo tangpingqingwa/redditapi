@@ -76,6 +76,46 @@ export function findKeyBySecret(db: SqliteDatabase, secret: string): KeyRecord |
   return rowToRecord(row as KeyRow);
 }
 
+export function chargeCredits(
+  db: SqliteDatabase,
+  key: KeyRecord,
+  amount: number,
+  route: string,
+  cached: boolean,
+): { ok: true; remaining: number } | { ok: false } {
+  if (!Number.isInteger(amount) || amount < 1) {
+    throw new Error(`credits to charge must be a positive integer, got ${amount}`);
+  }
+
+  const charged = db.transaction(() => {
+    const row = db.prepare("SELECT credits FROM keys WHERE id = ?").get(key.id) as
+      | { credits: number }
+      | undefined;
+    if (row === undefined || row.credits < amount) {
+      return null;
+    }
+    db.prepare("UPDATE keys SET credits = credits - ? WHERE id = ?").run(amount, key.id);
+    db.prepare(
+      `INSERT INTO usage_events (id, key_id, route, credits, cached, error_code, created_at)
+       VALUES (?, ?, ?, ?, ?, NULL, ?)`,
+    ).run(
+      `use_${randomUUID()}`,
+      key.id,
+      route,
+      amount,
+      cached ? 1 : 0,
+      new Date().toISOString(),
+    );
+    return row.credits - amount;
+  })();
+
+  if (charged === null) {
+    return { ok: false };
+  }
+  key.credits = charged;
+  return { ok: true, remaining: charged };
+}
+
 export function maybeBootstrapKey(db: SqliteDatabase, secret?: string): void {
   if (secret === undefined) {
     return;

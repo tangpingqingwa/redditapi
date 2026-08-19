@@ -1,8 +1,11 @@
 import Fastify, { type FastifyInstance } from "fastify";
+import { createFixtureAdapter } from "./adapters/reddit/fixture.js";
 import { maybeBootstrapKey } from "./billing/keys.js";
+import type { RedditAdapter } from "./core/thread.js";
 import { openDatabase, type SqliteDatabase } from "./db.js";
 import { healthRoutes } from "./http/routes/health.js";
 import { meRoutes } from "./http/routes/me.js";
+import { threadRoutes } from "./http/routes/threads.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -15,6 +18,7 @@ export type BuildAppOptions = {
   db?: SqliteDatabase;
   databasePath?: string;
   bootstrapKey?: string;
+  reddit?: RedditAdapter;
 };
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -23,6 +27,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   if (options.db === undefined) {
     maybeBootstrapKey(db, options.bootstrapKey);
   }
+  const reddit = options.reddit ?? createFixtureAdapter();
 
   app.decorate("sqlite", db);
   app.addHook("onClose", async () => {
@@ -31,5 +36,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   await app.register(healthRoutes);
   await app.register(meRoutes, { db });
+  await app.register(threadRoutes, { db, reddit });
   return app;
 }

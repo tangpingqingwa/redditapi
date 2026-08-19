@@ -1,0 +1,224 @@
+openapi: 3.0.3
+info:
+  title: RedditAPI
+  version: 0.1.0
+  description: Thread unroll snippet for GET /v1/threads/by-url (PR 2).
+paths:
+  /v1/threads/by-url:
+    get:
+      operationId: getThreadByUrl
+      summary: Unroll a public Reddit thread
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+          description: reddit.com or old.reddit permalink
+        - name: max_comments
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 500
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [best, new, top, qa]
+            default: best
+      responses:
+        "200":
+          description: Post plus expanded comment tree
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ThreadOk"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "402":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: rk_live_ / rk_test_
+  responses:
+    Error:
+      description: Error envelope; creditsCharged is always 0
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  schemas:
+    ThreadOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/ThreadData"
+        meta:
+          $ref: "#/components/schemas/OkMeta"
+    ThreadData:
+      type: object
+      required: [post, comments, commentCount]
+      properties:
+        post:
+          $ref: "#/components/schemas/RedditPost"
+        comments:
+          type: array
+          items:
+            $ref: "#/components/schemas/RedditComment"
+        commentCount:
+          type: integer
+          minimum: 0
+    RedditPost:
+      type: object
+      required:
+        - id
+        - subreddit
+        - title
+        - author
+        - selftext
+        - selftextMarkdown
+        - url
+        - permalink
+        - score
+        - createdAt
+        - nsfw
+        - spoiler
+        - locked
+        - flair
+      properties:
+        id:
+          type: string
+        subreddit:
+          type: string
+        title:
+          type: string
+        author:
+          type: string
+        selftext:
+          type: string
+        selftextMarkdown:
+          type: string
+        url:
+          type: string
+        permalink:
+          type: string
+        score:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        nsfw:
+          type: boolean
+        spoiler:
+          type: boolean
+        locked:
+          type: boolean
+        flair:
+          type: string
+          nullable: true
+    RedditComment:
+      type: object
+      required:
+        - id
+        - author
+        - body
+        - bodyMarkdown
+        - score
+        - createdAt
+        - distinguished
+        - status
+        - replies
+      properties:
+        id:
+          type: string
+        author:
+          type: string
+        body:
+          type: string
+        bodyMarkdown:
+          type: string
+        score:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        distinguished:
+          type: string
+          nullable: true
+          enum: [moderator, admin, null]
+        status:
+          type: string
+          enum: [visible, deleted, removed]
+        replies:
+          type: array
+          items:
+            $ref: "#/components/schemas/RedditComment"
+    OkMeta:
+      type: object
+      required: [cached, creditsCharged, requestId, upstreamMs]
+      properties:
+        cached:
+          type: boolean
+        creditsCharged:
+          type: integer
+          minimum: 0
+          maximum: 2
+        requestId:
+          type: string
+        upstreamMs:
+          type: integer
+          minimum: 0
+        truncated:
+          type: boolean
+    ErrorEnvelope:
+      type: object
+      required: [error, meta]
+      properties:
+        error:
+          type: object
+          required: [code, message, retryable]
+          properties:
+            code:
+              type: string
+              enum:
+                - invalid_request
+                - unauthorized
+                - payment_required
+                - subreddit_quarantined
+                - subreddit_private
+                - not_found
+                - rate_limited
+                - upstream_blocked
+                - internal
+            message:
+              type: string
+            retryable:
+              type: boolean
+        meta:
+          type: object
+          required: [creditsCharged, requestId]
+          properties:
+            creditsCharged:
+              type: integer
+              enum: [0]
+            requestId:
+              type: string
