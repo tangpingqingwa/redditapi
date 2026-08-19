@@ -74,6 +74,46 @@
             "distinguished": "admin",
             "replies": ""
           }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "id": "acctgone",
+            "name": "t1_acctgone",
+            "author": "[deleted]",
+            "body": "Account is gone but the comment remains",
+            "score": 2,
+            "created_utc": 1700002400,
+            "distinguished": null,
+            "replies": ""
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "id": "modcat",
+            "name": "t1_modcat",
+            "author": "mod_target",
+            "body": "this should be wiped",
+            "removed_by_category": "moderator",
+            "score": 1,
+            "created_utc": 1700002500,
+            "distinguished": null,
+            "replies": ""
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "id": "modphrase",
+            "name": "t1_modphrase",
+            "author": "someone",
+            "body": "[removed by moderator]",
+            "score": 1,
+            "created_utc": 1700002600,
+            "distinguished": null,
+            "replies": ""
+          }
         }
       ]
     }

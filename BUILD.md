@@ -41,9 +41,10 @@ Input: permalink URL or `t3_` id + `max_comments` (default 500, max 1000).
    - no more, or
    - `visibleComments >= max_comments`
 4. If stopped early: `meta.truncated = true`. Credits: 1 if final `commentCount <= 400` else 2 (SPEC).
-5. Map each node:
-   - `body === '[deleted]'` or author `[deleted]` → `status: deleted`, empty body
-   - `body === '[removed]'` → `status: removed`
+5. Map each node (`author` and `status` are independent):
+   - `body === '[deleted]'` → `status: deleted`, empty body, author `[deleted]`
+   - `body === '[removed]'` / `[removed by moderator]` or `removed_by_category` set → `status: removed`, empty body (keep author)
+   - author `[deleted]` with a real body stays `visible`
    - else `visible`
 6. **Never** invent body text for deleted/removed.
 

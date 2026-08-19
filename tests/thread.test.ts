@@ -182,6 +182,27 @@ test("SPEC 3: deleted and removed comments are marked and never reconstructed", 
   const visible = byId.get("t1_keep1");
   assert.equal(visible?.status, "visible");
   assert.equal(visible?.body, "Still here");
+
+  const accountDeleted = byId.get("t1_acctgone");
+  assert.ok(accountDeleted);
+  assert.equal(accountDeleted.status, "visible");
+  assert.equal(accountDeleted.author, "[deleted]");
+  assert.equal(accountDeleted.body, "Account is gone but the comment remains");
+  assert.equal(accountDeleted.bodyMarkdown, "Account is gone but the comment remains");
+
+  const removedByCategory = byId.get("t1_modcat");
+  assert.ok(removedByCategory);
+  assert.equal(removedByCategory.status, "removed");
+  assert.equal(removedByCategory.author, "mod_target");
+  assert.equal(removedByCategory.body, "");
+  assert.equal(removedByCategory.bodyMarkdown, "");
+
+  const removedByPhrase = byId.get("t1_modphrase");
+  assert.ok(removedByPhrase);
+  assert.equal(removedByPhrase.status, "removed");
+  assert.equal(removedByPhrase.author, "someone");
+  assert.equal(removedByPhrase.body, "");
+  assert.equal(removedByPhrase.bodyMarkdown, "");
 });
 
 test("SPEC 4: removed post is 404 not_found with 0 credits", async () => {

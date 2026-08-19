@@ -342,7 +342,7 @@ function mapComment(data: Record<string, unknown> | null, parentId: string): Mut
   }
   const rawAuthor = typeof data.author === "string" && data.author !== "" ? data.author : "[deleted]";
   const rawBody = typeof data.body === "string" ? data.body : "";
-  const status = commentStatus(rawAuthor, rawBody);
+  const status = commentStatus(data, rawBody);
   const author = status === "deleted" ? "[deleted]" : rawAuthor;
   const body = status === "visible" ? rawBody : "";
   return {
@@ -359,11 +359,15 @@ function mapComment(data: Record<string, unknown> | null, parentId: string): Mut
   };
 }
 
-function commentStatus(author: string, body: string): RedditComment["status"] {
-  if (body === "[deleted]" || author === "[deleted]") {
+function commentStatus(data: Record<string, unknown>, body: string): RedditComment["status"] {
+  if (body === "[deleted]") {
     return "deleted";
   }
-  if (body === "[removed]") {
+  if (
+    body === "[removed]" ||
+    body === "[removed by moderator]" ||
+    (data.removed_by_category !== undefined && data.removed_by_category !== null)
+  ) {
     return "removed";
   }
   return "visible";
