@@ -55,10 +55,21 @@ if [[ -f package.json ]]; then
   echo "== fixtures present =="
   for f in fixtures/small.json fixtures/with-more.json fixtures/morechildren.json \
     fixtures/deleted.json fixtures/removed-post.json fixtures/private.json fixtures/large.json \
-    openapi/threads.yaml tests/thread.test.ts; do
+    openapi/threads.yaml tests/thread.test.ts tests/html.test.ts \
+    src/views/home.ts src/views/thread.ts src/views/layout.ts src/views/legal.ts \
+    public/unroller.css public/unroller.js; do
     [[ -f "$f" ]] || fail "missing $f"
     [[ -s "$f" ]] || fail "empty $f"
   done
+
+  echo "== HTML unroller contract =="
+  grep -q 'SPEC 7' tests/html.test.ts || fail "tests/html.test.ts missing SPEC 7"
+  grep -q 'LEGAL_FOOTER' tests/html.test.ts || fail "tests/html.test.ts missing legal footer"
+  grep -q 'adsbygoogle' tests/html.test.ts || fail "tests/html.test.ts missing ads"
+  grep -q 'noindex' tests/html.test.ts || fail "tests/html.test.ts missing noindex"
+  if grep -qE 'www\.reddit\.com/api|oauth\.reddit\.com' tests/html.test.ts; then
+    fail "tests/html.test.ts mentions live Reddit hosts"
+  fi
 
   echo "== offline adapters only =="
   if grep -R --include='*.ts' -nE '\bfetch\s*\(' src; then
