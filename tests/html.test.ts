@@ -195,6 +195,9 @@ test("HTML unroller does not charge API credits and stays offline", async () => 
     async fetchListing() {
       throw new Error("HTML unroller must not fetch listings");
     },
+    async fetchSearch() {
+      throw new Error("HTML unroller must not search");
+    },
   };
   const { app, db } = await htmlApp(reddit);
   const first = await app.inject({ method: "GET", url: "/r/test/comments/short1/a_short_thread" });

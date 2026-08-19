@@ -7,7 +7,9 @@ import { healthRoutes } from "./http/routes/health.js";
 import { htmlRoutes } from "./http/routes/html.js";
 import { listingRoutes } from "./http/routes/listings.js";
 import { meRoutes } from "./http/routes/me.js";
+import { searchRoutes } from "./http/routes/search.js";
 import { threadRoutes } from "./http/routes/threads.js";
+import { mcpRoutes } from "./mcp/server.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -41,5 +43,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(meRoutes, { db });
   await app.register(threadRoutes, { db, reddit });
   await app.register(listingRoutes, { db, reddit });
+  await app.register(searchRoutes, { db, reddit });
+  await app.register(mcpRoutes, { db, reddit });
   return app;
 }

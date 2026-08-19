@@ -1,0 +1,61 @@
+{
+  "kind": "search",
+  "posts": [
+    {
+      "id": "hot1",
+      "subreddit": "test",
+      "title": "Hottest post",
+      "author": "alice",
+      "selftext": "High score thread about APIs",
+      "score": 900,
+      "num_comments": 40,
+      "created_utc": 1700000100,
+      "over_18": false,
+      "spoiler": false,
+      "locked": false,
+      "link_flair_text": "Hot"
+    },
+    {
+      "id": "new1",
+      "subreddit": "test",
+      "title": "Newest post",
+      "author": "bob",
+      "selftext": "Just posted about search APIs",
+      "score": 3,
+      "num_comments": 1,
+      "created_utc": 1700000900,
+      "over_18": false,
+      "spoiler": false,
+      "locked": false,
+      "link_flair_text": null
+    },
+    {
+      "id": "mid1",
+      "subreddit": "test",
+      "title": "Middle post",
+      "author": "carol",
+      "selftext": "In between API notes",
+      "score": 50,
+      "num_comments": 12,
+      "created_utc": 1700000500,
+      "over_18": false,
+      "spoiler": true,
+      "locked": false,
+      "link_flair_text": "Meta"
+    },
+    {
+      "id": "saas1",
+      "subreddit": "SaaS",
+      "title": "What r/SaaS thinks of pricing",
+      "author": "erin",
+      "selftext": "API pricing after the 2023 Reddit changes",
+      "score": 210,
+      "num_comments": 88,
+      "created_utc": 1700000700,
+      "over_18": false,
+      "spoiler": false,
+      "locked": false,
+      "link_flair_text": "Discussion"
+    }
+  ]
+}

@@ -8,13 +8,14 @@ import type {
   AdapterThreadOk,
   ListingFetchInput,
   RedditAdapter,
+  SearchFetchInput,
   ThreadRef,
 } from "../../core/thread.js";
-import type { ThreadSort } from "../../types.js";
+import type { SearchSort, ThreadSort } from "../../types.js";
 
 const FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../../fixtures");
 
-type FixtureKind = "listing" | "error" | "large" | "listings";
+type FixtureKind = "listing" | "error" | "large" | "listings" | "search";
 
 type FixtureErrorDoc = {
   kind: "error";
@@ -48,6 +49,16 @@ type FixtureListingsDoc = {
   kind: "listings";
   subreddit: string;
   posts: FixtureListingPost[];
+};
+
+type FixtureSearchPost = FixtureListingPost & {
+  subreddit: string;
+  num_comments: number;
+};
+
+type FixtureSearchDoc = {
+  kind: "search";
+  posts: FixtureSearchPost[];
 };
 
 const POST_FIXTURES: Record<string, string> = {
@@ -114,13 +125,26 @@ export function createFixtureAdapter(): RedditAdapter {
       }
       return { ok: true, listing: buildSubredditListing(input) };
     },
+
+    async fetchSearch(input: SearchFetchInput): Promise<AdapterListingOk | AdapterFailure> {
+      if (input.subreddit !== undefined) {
+        const sub = input.subreddit.toLowerCase();
+        if (sub === "privatesub") {
+          return readError("private.json");
+        }
+        if (sub === "quarantinedsub") {
+          return { ok: false, code: "subreddit_quarantined", message: "This subreddit is quarantined." };
+        }
+      }
+      return { ok: true, listing: buildSearchListing(input) };
+    },
   };
 }
 
 function fixtureKind(doc: unknown): FixtureKind {
   if (typeof doc === "object" && doc !== null && "kind" in doc) {
     const kind = (doc as { kind: unknown }).kind;
-    if (kind === "error" || kind === "large" || kind === "listings") {
+    if (kind === "error" || kind === "large" || kind === "listings" || kind === "search") {
       return kind;
     }
   }
@@ -256,6 +280,81 @@ function cursorIndex(posts: FixtureListingPost[], cursor: string | undefined): n
   const id = cursor.replace(/^t3_/, "");
   const index = posts.findIndex((post) => post.id === id);
   return index === -1 ? posts.length : index + 1;
+}
+
+function loadSearchDoc(): FixtureSearchDoc {
+  return readJson("search.json") as FixtureSearchDoc;
+}
+
+function buildSearchListing(input: SearchFetchInput): unknown {
+  const doc = loadSearchDoc();
+  const tokens = tokenizeQuery(input.q);
+  const scoped = input.subreddit
+    ? doc.posts.filter((post) => post.subreddit.toLowerCase() === input.subreddit?.toLowerCase())
+    : doc.posts.slice();
+  const matched = scoped.filter((post) => matchesQuery(post, tokens));
+  const ordered = orderSearchPosts(matched, input.sort);
+  const start = cursorIndex(ordered, input.cursor);
+  const page = ordered.slice(start, start + input.limit);
+  const last = page[page.length - 1];
+  const hasMore = start + page.length < ordered.length;
+  return {
+    kind: "Listing",
+    data: {
+      after: hasMore && last !== undefined ? `t3_${last.id}` : null,
+      children: page.map((post) => listingThing(post.subreddit, post)),
+    },
+  };
+}
+
+function tokenizeQuery(q: string): string[] {
+  return q
+    .toLowerCase()
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token !== "");
+}
+
+function matchesQuery(post: FixtureSearchPost, tokens: string[]): boolean {
+  if (tokens.length === 0) {
+    return false;
+  }
+  const haystack = `${post.title} ${post.selftext} ${post.subreddit}`.toLowerCase();
+  return tokens.every((token) => haystack.includes(token));
+}
+
+function orderSearchPosts(posts: FixtureSearchPost[], sort: SearchSort): FixtureSearchPost[] {
+  const copy = posts.slice();
+  if (sort === "new") {
+    copy.sort((a, b) => b.created_utc - a.created_utc);
+    return copy;
+  }
+  if (sort === "top" || sort === "hot") {
+    copy.sort((a, b) => b.score - a.score);
+    return copy;
+  }
+  if (sort === "comments") {
+    copy.sort((a, b) => b.num_comments - a.num_comments);
+    return copy;
+  }
+  copy.sort((a, b) => scoreRelevance(b) - scoreRelevance(a) || b.score - a.score);
+  return copy;
+}
+
+function scoreRelevance(post: FixtureSearchPost): number {
+  const title = post.title.toLowerCase();
+  const body = post.selftext.toLowerCase();
+  let score = 0;
+  if (title.includes("api") || body.includes("api")) {
+    score += 3;
+  }
+  if (title.includes("pricing") || body.includes("pricing")) {
+    score += 2;
+  }
+  if (title.includes("search") || body.includes("search")) {
+    score += 1;
+  }
+  return score;
 }
 
 function listingThing(subreddit: string, post: FixtureListingPost): unknown {
