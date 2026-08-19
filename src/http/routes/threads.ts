@@ -3,6 +3,7 @@ import { chargeCredits } from "../../billing/keys.js";
 import {
   DEFAULT_MAX_COMMENTS,
   MAX_COMMENTS_CAP,
+  getPost,
   unrollThread,
   type RedditAdapter,
 } from "../../core/thread.js";
@@ -12,6 +13,7 @@ import { requireKey } from "../auth.js";
 import { newRequestId, sendErr, sendOk } from "../envelope.js";
 
 export const THREADS_BY_URL_PATH = "/v1/threads/by-url" as const;
+export const POST_BY_ID_PATH = "/v1/posts/:id" as const;
 
 const SORTS = new Set<ThreadSort>(["best", "new", "top", "qa"]);
 
@@ -69,6 +71,31 @@ export const threadRoutes: FastifyPluginAsync<ThreadRoutesOptions> = async (app,
       cached: false,
       upstreamMs: result.upstreamMs,
       truncated: result.truncated,
+    });
+  });
+
+  app.get<{ Params: { id: string } }>(POST_BY_ID_PATH, async (request, reply) => {
+    const requestId = newRequestId();
+    const key = requireKey(opts.db, request, reply, requestId);
+    if (key === null) {
+      return reply;
+    }
+
+    const result = await getPost(opts.reddit, request.params.id);
+    if (!result.ok) {
+      return sendErr(reply, result.code, requestId, result.message);
+    }
+
+    const charged = chargeCredits(opts.db, key, result.credits, "/v1/posts/{id}", false);
+    if (!charged.ok) {
+      return sendErr(reply, "payment_required", requestId);
+    }
+
+    return sendOk(reply, result.data, {
+      requestId,
+      creditsCharged: result.credits,
+      cached: false,
+      upstreamMs: result.upstreamMs,
     });
   });
 };

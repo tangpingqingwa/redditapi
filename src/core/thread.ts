@@ -1,4 +1,11 @@
-import type { ErrorCode, RedditComment, RedditPost, ThreadData, ThreadSort } from "../types.js";
+import type {
+  ErrorCode,
+  RedditComment,
+  RedditPost,
+  SearchSort,
+  ThreadData,
+  ThreadSort,
+} from "../types.js";
 
 export const DEFAULT_MAX_COMMENTS = 500;
 export const MAX_COMMENTS_CAP = 1000;
@@ -40,6 +47,14 @@ export type ListingFetchInput = {
   limit: number;
 };
 
+export type SearchFetchInput = {
+  q: string;
+  subreddit?: string;
+  sort: SearchSort;
+  cursor?: string;
+  limit: number;
+};
+
 export type RedditAdapter = {
   fetchThread(ref: ThreadRef, sort: ThreadSort): Promise<AdapterThreadOk | AdapterFailure>;
   fetchMoreChildren(
@@ -48,6 +63,7 @@ export type RedditAdapter = {
     sort: ThreadSort,
   ): Promise<AdapterMoreOk | AdapterFailure>;
   fetchListing(input: ListingFetchInput): Promise<AdapterListingOk | AdapterFailure>;
+  fetchSearch(input: SearchFetchInput): Promise<AdapterListingOk | AdapterFailure>;
 };
 
 export type UnrollInput = {
@@ -71,6 +87,17 @@ export type UnrollErr = {
 };
 
 export type UnrollResult = UnrollOk | UnrollErr;
+
+export type PostOk = {
+  ok: true;
+  data: RedditPost;
+  credits: 1;
+  upstreamMs: number;
+};
+
+export type PostResult = PostOk | UnrollErr;
+
+const POST_ID = /^[A-Za-z0-9]+$/;
 
 type MoreJob = {
   parentId: string;
@@ -129,6 +156,43 @@ export function parseRedditThreadUrl(raw: string): ThreadRef | null {
 
 export function creditsForCommentCount(commentCount: number): 1 | 2 {
   return commentCount <= CREDIT_EXPAND_THRESHOLD ? 1 : 2;
+}
+
+export function normalizePostId(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    return null;
+  }
+  const id = trimmed.replace(/^t3_/i, "").toLowerCase();
+  if (!POST_ID.test(id)) {
+    return null;
+  }
+  return id;
+}
+
+export async function getPost(adapter: RedditAdapter, id: string): Promise<PostResult> {
+  const postId = normalizePostId(id);
+  if (postId === null) {
+    return { ok: false, code: "invalid_request", message: "id must be a Reddit post id (abc123 or t3_abc123)." };
+  }
+
+  const started = performance.now();
+  const fetched = await adapter.fetchThread({ postId, subreddit: null, permalink: `/comments/${postId}` }, "best");
+  if (!fetched.ok) {
+    return { ok: false, code: fetched.code, message: fetched.message ?? defaultMessage(fetched.code) };
+  }
+
+  const parsed = parseThreadListing(fetched.listing);
+  if (!parsed.ok) {
+    return parsed;
+  }
+
+  return {
+    ok: true,
+    data: parsed.post,
+    credits: 1,
+    upstreamMs: Math.max(0, Math.round(performance.now() - started)),
+  };
 }
 
 export async function unrollThread(adapter: RedditAdapter, input: UnrollInput): Promise<UnrollResult> {

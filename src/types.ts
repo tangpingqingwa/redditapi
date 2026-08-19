@@ -25,6 +25,8 @@ export type ListingKind = ListingSort | "latest";
 
 export type TopWindow = "day" | "week" | "month" | "year" | "all";
 
+export type SearchSort = "relevance" | "hot" | "top" | "new" | "comments";
+
 export type CommentStatus = "visible" | "deleted" | "removed";
 
 export type RedditPost = {
@@ -66,6 +68,14 @@ export type ListingData = {
   subreddit: string;
   sort: ListingKind;
   t: TopWindow | null;
+  posts: RedditPost[];
+  nextCursor: string | null;
+};
+
+export type SearchData = {
+  q: string;
+  subreddit: string | null;
+  sort: SearchSort;
   posts: RedditPost[];
   nextCursor: string | null;
 };

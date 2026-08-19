@@ -1,0 +1,70 @@
+# RedditAPI
+
+> Unroll a public Reddit thread in one call. $5/mo. Failures are free.
+
+Read-only REST + MCP for public posts, nested comments, subreddit listings, and search. Independent, not affiliated with Reddit.
+
+Skill: do not use for voting or posting; private subs will 403; trees may truncate.
+
+## URLs
+
+- REST: https://api.redditapi.dev
+- MCP Streamable HTTP: https://mcp.redditapi.dev/mcp
+- This file: /llms.txt
+- Server card: /.well-known/mcp/server-card.json
+
+## Auth
+
+```
+Authorization: Bearer rk_live_...
+Authorization: Bearer rk_test_...
+```
+
+Same key space for REST and MCP. No scopes.
+
+## MCP tools
+
+### unroll_thread
+
+Maps to `GET /v1/threads/by-url`. Arguments: `url` (required), optional `max_comments` (default 500, max 1000), optional `sort` (`best` | `new` | `top` | `qa`).
+
+**Credits:** 1 if `commentCount <= 400`, else 2. If MoreComments cannot fully expand, `meta.truncated = true`. Deleted / removed nodes are marked with empty bodies — never invent text.
+
+### get_post
+
+Maps to `GET /v1/posts/{id}`. Argument: `id` (`abc123` or `t3_abc123`). **1 credit**. Post only, no comments.
+
+### list_subreddit
+
+Maps to `GET /v1/r/{sub}/hot|new|top`. Arguments: `sub` (required), optional `sort` (`hot` | `new` | `top`, default hot), optional `t` on top, optional `cursor`, optional `limit` (1–100). **1 credit per page**.
+
+### search_reddit
+
+Maps to `GET /v1/search`. Arguments: `q` (required), optional `sub`, `sort` (`relevance` | `hot` | `top` | `new` | `comments`), `cursor`. **1 credit per page with hits; empty = 0**.
+
+### get_latest
+
+Maps to `GET /v1/r/{sub}/latest`. Argument: `sub`. Newest ~25 posts. **0 credits**.
+
+## When not to call
+
+- Voting, commenting, posting, or any write — we are read-only.
+- Private or password subs — expect `subreddit_private` 403, 0 credits.
+- Quarantined subs — expect `subreddit_quarantined` 403, 0 credits.
+- Reconstructing deleted or removed comments — bodies stay empty.
+- Assuming a 500-comment tree is complete — check `meta.truncated`.
+
+## Errors
+
+Same envelope as REST. `creditsCharged` is always 0 on error.
+
+| code | HTTP | meaning |
+|---|---|---|
+| invalid_request | 400 | bad args |
+| unauthorized | 401 | missing/invalid key |
+| payment_required | 402 | out of credits |
+| subreddit_quarantined | 403 | listing blocked |
+| subreddit_private | 403 | not public |
+| not_found | 404 | gone / removed |
+| rate_limited | 429 | retryable |
+| upstream_blocked | 503 | retryable |
