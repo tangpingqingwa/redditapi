@@ -3,8 +3,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
   AdapterFailure,
+  AdapterListingOk,
   AdapterMoreOk,
   AdapterThreadOk,
+  ListingFetchInput,
   RedditAdapter,
   ThreadRef,
 } from "../../core/thread.js";
@@ -12,7 +14,7 @@ import type { ThreadSort } from "../../types.js";
 
 const FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../../fixtures");
 
-type FixtureKind = "listing" | "error" | "large";
+type FixtureKind = "listing" | "error" | "large" | "listings";
 
 type FixtureErrorDoc = {
   kind: "error";
@@ -27,6 +29,25 @@ type FixtureLargeDoc = {
   title: string;
   firstPage: number;
   more: number;
+};
+
+type FixtureListingPost = {
+  id: string;
+  title: string;
+  author: string;
+  selftext: string;
+  score: number;
+  created_utc: number;
+  over_18: boolean;
+  spoiler: boolean;
+  locked: boolean;
+  link_flair_text: string | null;
+};
+
+type FixtureListingsDoc = {
+  kind: "listings";
+  subreddit: string;
+  posts: FixtureListingPost[];
 };
 
 const POST_FIXTURES: Record<string, string> = {
@@ -79,13 +100,27 @@ export function createFixtureAdapter(): RedditAdapter {
       }
       return { ok: true, things };
     },
+
+    async fetchListing(input: ListingFetchInput): Promise<AdapterListingOk | AdapterFailure> {
+      const sub = input.subreddit.toLowerCase();
+      if (sub === "privatesub") {
+        return readError("private.json");
+      }
+      if (sub === "quarantinedsub") {
+        return { ok: false, code: "subreddit_quarantined", message: "This subreddit is quarantined." };
+      }
+      if (sub !== "test") {
+        return { ok: false, code: "not_found" };
+      }
+      return { ok: true, listing: buildSubredditListing(input) };
+    },
   };
 }
 
 function fixtureKind(doc: unknown): FixtureKind {
   if (typeof doc === "object" && doc !== null && "kind" in doc) {
     const kind = (doc as { kind: unknown }).kind;
-    if (kind === "error" || kind === "large") {
+    if (kind === "error" || kind === "large" || kind === "listings") {
       return kind;
     }
   }
@@ -178,6 +213,71 @@ function buildLargeListing(doc: FixtureLargeDoc): unknown {
     },
     { kind: "Listing", data: { children } },
   ];
+}
+
+function loadListingsDoc(): FixtureListingsDoc {
+  return readJson("listings.json") as FixtureListingsDoc;
+}
+
+function buildSubredditListing(input: ListingFetchInput): unknown {
+  const doc = loadListingsDoc();
+  const ordered = orderListingPosts(doc.posts, input);
+  const start = cursorIndex(ordered, input.cursor);
+  const page = ordered.slice(start, start + input.limit);
+  const last = page[page.length - 1];
+  const hasMore = start + page.length < ordered.length;
+  return {
+    kind: "Listing",
+    data: {
+      after: hasMore && last !== undefined ? `t3_${last.id}` : null,
+      children: page.map((post) => listingThing(doc.subreddit, post)),
+    },
+  };
+}
+
+function orderListingPosts(posts: FixtureListingPost[], input: ListingFetchInput): FixtureListingPost[] {
+  const copy = posts.slice();
+  if (input.sort === "new" || input.sort === "latest") {
+    copy.sort((a, b) => b.created_utc - a.created_utc);
+    return copy;
+  }
+  if (input.sort === "top") {
+    copy.sort((a, b) => b.score - a.score);
+    return copy;
+  }
+  copy.sort((a, b) => b.score - a.score || b.created_utc - a.created_utc);
+  return copy;
+}
+
+function cursorIndex(posts: FixtureListingPost[], cursor: string | undefined): number {
+  if (cursor === undefined) {
+    return 0;
+  }
+  const id = cursor.replace(/^t3_/, "");
+  const index = posts.findIndex((post) => post.id === id);
+  return index === -1 ? posts.length : index + 1;
+}
+
+function listingThing(subreddit: string, post: FixtureListingPost): unknown {
+  return {
+    kind: "t3",
+    data: {
+      id: post.id,
+      name: `t3_${post.id}`,
+      subreddit,
+      title: post.title,
+      author: post.author,
+      selftext: post.selftext,
+      url: `https://www.reddit.com/r/${subreddit}/comments/${post.id}/`,
+      permalink: `/r/${subreddit}/comments/${post.id}/`,
+      score: post.score,
+      created_utc: post.created_utc,
+      over_18: post.over_18,
+      spoiler: post.spoiler,
+      locked: post.locked,
+      link_flair_text: post.link_flair_text,
+    },
+  };
 }
 
 function syntheticComment(id: string, parentId: string): unknown {

@@ -192,6 +192,9 @@ test("HTML unroller does not charge API credits and stays offline", async () => 
     async fetchMoreChildren(): Promise<AdapterMoreOk | AdapterFailure> {
       throw new Error("HTML unroller must not need morechildren for the short fixture");
     },
+    async fetchListing() {
+      throw new Error("HTML unroller must not fetch listings");
+    },
   };
   const { app, db } = await htmlApp(reddit);
   const first = await app.inject({ method: "GET", url: "/r/test/comments/short1/a_short_thread" });

@@ -19,6 +19,12 @@ export type OkMeta = {
 
 export type ThreadSort = "best" | "new" | "top" | "qa";
 
+export type ListingSort = "hot" | "new" | "top";
+
+export type ListingKind = ListingSort | "latest";
+
+export type TopWindow = "day" | "week" | "month" | "year" | "all";
+
 export type CommentStatus = "visible" | "deleted" | "removed";
 
 export type RedditPost = {
@@ -54,6 +60,14 @@ export type ThreadData = {
   post: RedditPost;
   comments: RedditComment[];
   commentCount: number;
+};
+
+export type ListingData = {
+  subreddit: string;
+  sort: ListingKind;
+  t: TopWindow | null;
+  posts: RedditPost[];
+  nextCursor: string | null;
 };
 
 export type Ok<T> = {

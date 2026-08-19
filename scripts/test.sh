@@ -55,7 +55,9 @@ if [[ -f package.json ]]; then
   echo "== fixtures present =="
   for f in fixtures/small.json fixtures/with-more.json fixtures/morechildren.json \
     fixtures/deleted.json fixtures/removed-post.json fixtures/private.json fixtures/large.json \
-    openapi/threads.yaml tests/thread.test.ts tests/html.test.ts \
+    fixtures/listings.json openapi/threads.yaml openapi/listings.yaml \
+    tests/thread.test.ts tests/html.test.ts tests/listings.test.ts \
+    src/core/listings.ts src/http/routes/listings.ts \
     src/views/home.ts src/views/thread.ts src/views/layout.ts src/views/legal.ts \
     public/unroller.css public/unroller.js; do
     [[ -f "$f" ]] || fail "missing $f"
@@ -69,6 +71,18 @@ if [[ -f package.json ]]; then
   grep -q 'noindex' tests/html.test.ts || fail "tests/html.test.ts missing noindex"
   if grep -qE 'www\.reddit\.com/api|oauth\.reddit\.com' tests/html.test.ts; then
     fail "tests/html.test.ts mentions live Reddit hosts"
+  fi
+
+  echo "== listings + latest contract =="
+  grep -q 'SPEC 6' tests/listings.test.ts || fail "tests/listings.test.ts missing SPEC 6"
+  grep -q 'subreddit_private' tests/listings.test.ts || fail "tests/listings.test.ts missing private sub"
+  grep -q '/v1/r/test/latest' tests/listings.test.ts || fail "tests/listings.test.ts missing latest path"
+  grep -q 'creditsCharged, 0' tests/listings.test.ts || fail "tests/listings.test.ts missing 0-credit latest"
+  if grep -qE 'www\.reddit\.com/api|oauth\.reddit\.com' tests/listings.test.ts; then
+    fail "tests/listings.test.ts mentions live Reddit hosts"
+  fi
+  if grep -R --include='*.ts' -nE 'search_reddit|/v1/search|src/mcp' src tests; then
+    fail "search/MCP belongs in PR 5, not listings"
   fi
 
   echo "== offline adapters only =="
