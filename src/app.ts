@@ -4,6 +4,7 @@ import { maybeBootstrapKey } from "./billing/keys.js";
 import type { RedditAdapter } from "./core/thread.js";
 import { openDatabase, type SqliteDatabase } from "./db.js";
 import { healthRoutes } from "./http/routes/health.js";
+import { htmlRoutes } from "./http/routes/html.js";
 import { meRoutes } from "./http/routes/me.js";
 import { threadRoutes } from "./http/routes/threads.js";
 
@@ -35,6 +36,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   await app.register(healthRoutes);
+  await app.register(htmlRoutes, { reddit });
   await app.register(meRoutes, { db });
   await app.register(threadRoutes, { db, reddit });
   return app;
