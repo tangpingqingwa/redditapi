@@ -52,6 +52,22 @@ if [[ -f package.json ]]; then
 
   ls tests/*.test.ts >/dev/null 2>&1 || fail "no tests/*.test.ts files"
 
+  echo "== fixtures present =="
+  for f in fixtures/small.json fixtures/with-more.json fixtures/morechildren.json \
+    fixtures/deleted.json fixtures/removed-post.json fixtures/private.json fixtures/large.json \
+    openapi/threads.yaml tests/thread.test.ts; do
+    [[ -f "$f" ]] || fail "missing $f"
+    [[ -s "$f" ]] || fail "empty $f"
+  done
+
+  echo "== offline adapters only =="
+  if grep -R --include='*.ts' -nE '\bfetch\s*\(' src; then
+    fail "src/ must not call fetch (fixture adapter only)"
+  fi
+  if grep -R --include='*.ts' -nE "from ['\"]undici['\"]|from ['\"]node:https?['\"]" src; then
+    fail "src/ must not import an HTTP client yet"
+  fi
+
   echo "== unit tests =="
   # Quoted so bash 3.2 does not eat **; Node 22's test runner expands the glob.
   set +e

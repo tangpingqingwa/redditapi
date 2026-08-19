@@ -176,7 +176,7 @@ Skill must say: do not use for voting or posting; private subs will 403; trees m
 | 1 | Short thread <50 comments | full tree, 1 credit |
 | 2 | Thread with MoreComments | expanded to cap, `truncated` if needed |
 | 3 | Deleted comment in tree | `status=deleted`, empty body |
-| 4 | Removed post | 404 or post `removed` — pick one and test it; prefer 404 `not_found` if listing gone |
+| 4 | Removed post | 404 `not_found`, 0 credits (listing gone / removed) |
 | 5 | Private sub | 403 `subreddit_private`, 0 credit |
 | 6 | `latest` | 0 credit |
 | 7 | Unroller HTML contains comment text | SEO |

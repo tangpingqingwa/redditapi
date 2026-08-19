@@ -51,6 +51,7 @@ export function buildOk<T>(
       creditsCharged: meta.creditsCharged ?? 0,
       requestId: meta.requestId,
       upstreamMs: meta.upstreamMs ?? 0,
+      ...(meta.truncated === undefined ? {} : { truncated: meta.truncated }),
     },
   };
 }

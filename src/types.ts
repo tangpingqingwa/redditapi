@@ -14,6 +14,46 @@ export type OkMeta = {
   creditsCharged: number;
   requestId: string;
   upstreamMs: number;
+  truncated?: boolean;
+};
+
+export type ThreadSort = "best" | "new" | "top" | "qa";
+
+export type CommentStatus = "visible" | "deleted" | "removed";
+
+export type RedditPost = {
+  id: string;
+  subreddit: string;
+  title: string;
+  author: string | "[deleted]";
+  selftext: string;
+  selftextMarkdown: string;
+  url: string;
+  permalink: string;
+  score: number | null;
+  createdAt: string;
+  nsfw: boolean;
+  spoiler: boolean;
+  locked: boolean;
+  flair: string | null;
+};
+
+export type RedditComment = {
+  id: string;
+  author: string | "[deleted]";
+  body: string;
+  bodyMarkdown: string;
+  score: number | null;
+  createdAt: string;
+  distinguished: "moderator" | "admin" | null;
+  status: CommentStatus;
+  replies: RedditComment[];
+};
+
+export type ThreadData = {
+  post: RedditPost;
+  comments: RedditComment[];
+  commentCount: number;
 };
 
 export type Ok<T> = {

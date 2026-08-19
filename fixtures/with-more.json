@@ -1,0 +1,77 @@
+[
+  {
+    "kind": "Listing",
+    "data": {
+      "children": [
+        {
+          "kind": "t3",
+          "data": {
+            "id": "more1",
+            "name": "t3_more1",
+            "subreddit": "test",
+            "title": "Expand me",
+            "author": "op",
+            "selftext": "There are more comments",
+            "url": "https://www.reddit.com/r/test/comments/more1/expand_me/",
+            "permalink": "/r/test/comments/more1/expand_me/",
+            "score": 8,
+            "created_utc": 1700001000,
+            "over_18": false,
+            "spoiler": false,
+            "locked": false,
+            "link_flair_text": null
+          }
+        }
+      ]
+    }
+  },
+  {
+    "kind": "Listing",
+    "data": {
+      "children": [
+        {
+          "kind": "t1",
+          "data": {
+            "id": "root1",
+            "name": "t1_root1",
+            "author": "root",
+            "body": "Visible root",
+            "score": 5,
+            "created_utc": 1700001100,
+            "distinguished": null,
+            "replies": {
+              "kind": "Listing",
+              "data": {
+                "children": [
+                  {
+                    "kind": "more",
+                    "data": {
+                      "count": 4,
+                      "children": ["exp1", "exp2", "exp3", "exp4"],
+                      "parent_id": "t1_root1",
+                      "id": "moreroot",
+                      "name": "t1_moreroot"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "id": "root2",
+            "name": "t1_root2",
+            "author": "other",
+            "body": "Another top-level",
+            "score": 1,
+            "created_utc": 1700001200,
+            "distinguished": null,
+            "replies": ""
+          }
+        }
+      ]
+    }
+  }
+]
