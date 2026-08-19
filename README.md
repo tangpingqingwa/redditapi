@@ -1,5 +1,7 @@
 # RedditAPI
 
+Build contract: [SPEC.md](./SPEC.md).
+
 Threads, comments, subreddit listings, and search as a self-serve REST + MCP.
 
 Reddit’s own API is alive and priced for companies. This product exists for everyone who got cut off in 2023 and never came back.
