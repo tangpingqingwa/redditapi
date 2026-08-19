@@ -27,6 +27,19 @@ export type AdapterMoreOk = {
   things: unknown[];
 };
 
+export type AdapterListingOk = {
+  ok: true;
+  listing: unknown;
+};
+
+export type ListingFetchInput = {
+  subreddit: string;
+  sort: "hot" | "new" | "top" | "latest";
+  t?: "day" | "week" | "month" | "year" | "all";
+  cursor?: string;
+  limit: number;
+};
+
 export type RedditAdapter = {
   fetchThread(ref: ThreadRef, sort: ThreadSort): Promise<AdapterThreadOk | AdapterFailure>;
   fetchMoreChildren(
@@ -34,6 +47,7 @@ export type RedditAdapter = {
     children: string[],
     sort: ThreadSort,
   ): Promise<AdapterMoreOk | AdapterFailure>;
+  fetchListing(input: ListingFetchInput): Promise<AdapterListingOk | AdapterFailure>;
 };
 
 export type UnrollInput = {
@@ -213,7 +227,7 @@ function parseThreadListing(listing: unknown):
   }
   return {
     ok: true,
-    post: mapPost(postData),
+    post: mapRedditPost(postData),
     commentChildren: listingChildren(commentListing),
   };
 }
@@ -227,7 +241,7 @@ function isRemovedPost(data: Record<string, unknown>): boolean {
   return author === "[deleted]" && selftext === "[removed]";
 }
 
-function mapPost(data: Record<string, unknown>): RedditPost {
+export function mapRedditPost(data: Record<string, unknown>): RedditPost {
   const id = fullname(data, "t3");
   const permalink = typeof data.permalink === "string" ? data.permalink : `/comments/${stripPrefix(id)}/`;
   const author = typeof data.author === "string" && data.author !== "" ? data.author : "[deleted]";

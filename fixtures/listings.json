@@ -1,0 +1,54 @@
+{
+  "kind": "listings",
+  "subreddit": "test",
+  "posts": [
+    {
+      "id": "hot1",
+      "title": "Hottest post",
+      "author": "alice",
+      "selftext": "High score",
+      "score": 900,
+      "created_utc": 1700000100,
+      "over_18": false,
+      "spoiler": false,
+      "locked": false,
+      "link_flair_text": "Hot"
+    },
+    {
+      "id": "new1",
+      "title": "Newest post",
+      "author": "bob",
+      "selftext": "Just posted",
+      "score": 3,
+      "created_utc": 1700000900,
+      "over_18": false,
+      "spoiler": false,
+      "locked": false,
+      "link_flair_text": null
+    },
+    {
+      "id": "mid1",
+      "title": "Middle post",
+      "author": "carol",
+      "selftext": "In between",
+      "score": 50,
+      "created_utc": 1700000500,
+      "over_18": false,
+      "spoiler": true,
+      "locked": false,
+      "link_flair_text": "Meta"
+    },
+    {
+      "id": "old1",
+      "title": "Oldest post",
+      "author": "dave",
+      "selftext": "From earlier",
+      "score": 120,
+      "created_utc": 1700000000,
+      "over_18": true,
+      "spoiler": false,
+      "locked": true,
+      "link_flair_text": null
+    }
+  ]
+}
