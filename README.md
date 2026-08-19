@@ -1,6 +1,7 @@
 # RedditAPI
 
 Build contract: [SPEC.md](./SPEC.md).
+How we work: [CONTRIBUTING.md](./CONTRIBUTING.md). `main` stays buildable and testable.
 
 Threads, comments, subreddit listings, and search as a self-serve REST + MCP.
 
