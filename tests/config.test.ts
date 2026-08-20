@@ -3,9 +3,12 @@ import { test } from "node:test";
 import {
   DEFAULT_DATABASE_PATH,
   DEFAULT_PORT,
+  DEFAULT_USER_AGENT,
+  liveRedditEnabled,
   parseListenPort,
   resolveBootstrapKey,
   resolveDatabasePath,
+  resolveUserAgent,
 } from "../src/config.js";
 
 test("parseListenPort defaults unset and empty to 3000", () => {
@@ -28,4 +31,15 @@ test("resolveDatabasePath and bootstrap key treat empty as unset", () => {
   assert.equal(resolveBootstrapKey(undefined), undefined);
   assert.equal(resolveBootstrapKey(""), undefined);
   assert.equal(resolveBootstrapKey("rk_test_dev"), "rk_test_dev");
+});
+
+test("liveRedditEnabled is only true for REDDITAPI_LIVE=1", () => {
+  assert.equal(liveRedditEnabled(undefined), false);
+  assert.equal(liveRedditEnabled(""), false);
+  assert.equal(liveRedditEnabled("0"), false);
+  assert.equal(liveRedditEnabled("true"), false);
+  assert.equal(liveRedditEnabled("1"), true);
+  assert.equal(resolveUserAgent(undefined), DEFAULT_USER_AGENT);
+  assert.equal(resolveUserAgent(""), DEFAULT_USER_AGENT);
+  assert.equal(resolveUserAgent("redditapi-test/1"), "redditapi-test/1");
 });
