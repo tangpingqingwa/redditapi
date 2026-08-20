@@ -315,6 +315,138 @@ test("HTTP listings and search with mocked live adapter stay 0 credits on failur
   assert.equal(remaining.credits, 7);
 });
 
+test("login-wall 302 lor2 is upstream_blocked, never not_found", async () => {
+  const adapter = createLiveRedditAdapter({
+    fallbackOrigin: null,
+    fetch: mockFetch((url) => {
+      assert.match(url.hostname, /old\.reddit\.com$/);
+      return {
+        status: 302,
+        text: "",
+        headers: {
+          location: `https://old.reddit.com/login/?reason=lor2&dest=${encodeURIComponent(url.href)}`,
+        },
+      };
+    }),
+  });
+
+  const thread = await unrollThread(adapter, {
+    url: "https://www.reddit.com/r/pics/comments/92dd8/test_post_please_ignore/",
+    maxComments: 50,
+    sort: "best",
+  });
+  assert.equal(thread.ok, false);
+  if (thread.ok) {
+    return;
+  }
+  assert.equal(thread.code, "upstream_blocked");
+
+  const listing = await adapter.fetchListing({ subreddit: "pics", sort: "hot", limit: 5 });
+  assert.equal(listing.ok, false);
+  if (listing.ok) {
+    return;
+  }
+  assert.equal(listing.code, "upstream_blocked");
+});
+
+test("followed login 404 is upstream_blocked, never invented comments", async () => {
+  const adapter = createLiveRedditAdapter({
+    fallbackOrigin: null,
+    fetch: mockFetch(() => ({
+      status: 404,
+      text: "Not Found",
+      headers: { "content-type": "text/html" },
+    })),
+  });
+  const result = await unrollThread(adapter, {
+    url: "https://old.reddit.com/r/pics/comments/92dd8/test_post_please_ignore/",
+    maxComments: 50,
+    sort: "best",
+  });
+  assert.equal(result.ok, false);
+  if (result.ok) {
+    return;
+  }
+  assert.equal(result.code, "upstream_blocked");
+});
+
+test("www 403 HTML is upstream_blocked", async () => {
+  const adapter = createLiveRedditAdapter({
+    origin: "https://www.reddit.com",
+    fallbackOrigin: null,
+    fetch: mockFetch(() => ({
+      status: 403,
+      text: "<html><body class=theme-beta>blocked</body></html>",
+      headers: { "content-type": "text/html" },
+    })),
+  });
+  const search = await adapter.fetchSearch({ q: "cats", sort: "relevance", limit: 5 });
+  assert.equal(search.ok, false);
+  if (search.ok) {
+    return;
+  }
+  assert.equal(search.code, "upstream_blocked");
+});
+
+test("lor2 on old.reddit falls back to www.reddit.com JSON", async () => {
+  const seen: string[] = [];
+  const adapter = createLiveRedditAdapter({
+    fetch: mockFetch((url) => {
+      seen.push(url.origin + url.pathname);
+      if (url.hostname === "old.reddit.com") {
+        return {
+          status: 302,
+          text: "",
+          headers: {
+            location: `https://old.reddit.com/login/?reason=lor2&dest=${encodeURIComponent(url.href)}`,
+          },
+        };
+      }
+      if (url.hostname === "www.reddit.com" && url.pathname.includes("/comments/92dd8")) {
+        return {
+          status: 200,
+          body: [
+            { kind: "Listing", data: { children: [listingThing("92dd8", "Test post please ignore")] } },
+            { kind: "Listing", data: { children: [] } },
+          ],
+        };
+      }
+      throw new Error(`unexpected live url ${url.href}`);
+    }),
+  });
+
+  const result = await unrollThread(adapter, {
+    url: "https://www.reddit.com/r/pics/comments/92dd8/test_post_please_ignore/",
+    maxComments: 50,
+    sort: "best",
+  });
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  assert.equal(result.data.post.title, "Test post please ignore");
+  assert.equal(result.data.commentCount, 0);
+  assert.ok(seen.some((u) => u.startsWith("https://old.reddit.com")));
+  assert.ok(seen.some((u) => u.startsWith("https://www.reddit.com")));
+});
+
+test("JSON 404 stays not_found after a real missing listing", async () => {
+  const adapter = createLiveRedditAdapter({
+    fallbackOrigin: null,
+    fetch: mockFetch(() => ({ status: 404, body: { error: 404 } })),
+  });
+  const result = await unrollThread(adapter, {
+    url: "https://www.reddit.com/r/test/comments/gone1/removed/",
+    maxComments: 50,
+    sort: "best",
+  });
+  assert.equal(result.ok, false);
+  if (result.ok) {
+    return;
+  }
+  assert.equal(result.code, "not_found");
+});
+
 test("rate-limited and network failures map to SPEC errors with 0 credits", async () => {
   const limited = createLiveRedditAdapter({
     fetch: mockFetch(() => ({ status: 429, body: {}, headers: { "retry-after": "12" } })),

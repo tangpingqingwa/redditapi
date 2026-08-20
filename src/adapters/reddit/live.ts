@@ -12,17 +12,26 @@ import type {
 import type { ErrorCode, ThreadSort } from "../../types.js";
 
 export const DEFAULT_REDDIT_ORIGIN = "https://old.reddit.com";
+/** Public JSON when old.reddit returns a login wall (lor2) or 403 HTML. */
+export const FALLBACK_REDDIT_ORIGIN = "https://www.reddit.com";
 export const LIVE_TIMEOUT_MS = 15_000;
 export const LIVE_CONCURRENCY = 4;
 
 export type LiveFetch = (
   input: string,
-  init?: { method?: string; headers?: Record<string, string>; signal?: AbortSignal },
+  init?: {
+    method?: string;
+    headers?: Record<string, string>;
+    signal?: AbortSignal;
+    redirect?: "follow" | "error" | "manual";
+  },
 ) => Promise<Response>;
 
 export type LiveRedditOptions = {
   fetch?: LiveFetch;
   origin?: string;
+  /** Set null to disable. Default: www.reddit.com when origin is the default. */
+  fallbackOrigin?: string | null;
   userAgent?: string;
   timeoutMs?: number;
   concurrency?: number;
@@ -30,6 +39,7 @@ export type LiveRedditOptions = {
 
 export function createLiveRedditAdapter(options: LiveRedditOptions = {}): RedditAdapter {
   const origin = (options.origin ?? DEFAULT_REDDIT_ORIGIN).replace(/\/+$/, "");
+  const fallbackOrigin = resolveFallbackOrigin(origin, options);
   const userAgent = options.userAgent ?? resolveUserAgent();
   const timeoutMs = options.timeoutMs ?? LIVE_TIMEOUT_MS;
   const fetchFn = options.fetch ?? defaultFetch;
@@ -38,7 +48,14 @@ export function createLiveRedditAdapter(options: LiveRedditOptions = {}): Reddit
   return {
     async fetchThread(ref: ThreadRef, sort: ThreadSort): Promise<AdapterThreadOk | AdapterFailure> {
       const params = new URLSearchParams({ raw_json: "1", sort, limit: "500" });
-      const result = await redditGet(limit, fetchFn, `${origin}${threadPath(ref)}.json?${params}`, userAgent, timeoutMs);
+      const result = await redditGet(
+        limit,
+        fetchFn,
+        `${origin}${threadPath(ref)}.json?${params}`,
+        userAgent,
+        timeoutMs,
+        fallbackOrigin,
+      );
       if (!result.ok) {
         return result;
       }
@@ -70,6 +87,7 @@ export function createLiveRedditAdapter(options: LiveRedditOptions = {}): Reddit
         `${origin}/api/morechildren?${params}`,
         userAgent,
         timeoutMs,
+        fallbackOrigin,
       );
       if (!result.ok) {
         return result;
@@ -92,6 +110,7 @@ export function createLiveRedditAdapter(options: LiveRedditOptions = {}): Reddit
         `${origin}/r/${encodeURIComponent(input.subreddit)}/${sortPath}.json?${params}`,
         userAgent,
         timeoutMs,
+        fallbackOrigin,
       );
       if (!result.ok) {
         return result;
@@ -117,7 +136,14 @@ export function createLiveRedditAdapter(options: LiveRedditOptions = {}): Reddit
         path = `/r/${encodeURIComponent(input.subreddit)}/search.json`;
         params.set("restrict_sr", "1");
       }
-      const result = await redditGet(limit, fetchFn, `${origin}${path}?${params}`, userAgent, timeoutMs);
+      const result = await redditGet(
+        limit,
+        fetchFn,
+        `${origin}${path}?${params}`,
+        userAgent,
+        timeoutMs,
+        fallbackOrigin,
+      );
       if (!result.ok) {
         return result;
       }
@@ -130,7 +156,21 @@ export function createLiveRedditAdapter(options: LiveRedditOptions = {}): Reddit
 }
 
 function defaultFetch(input: string, init?: RequestInit): Promise<Response> {
-  return fetch(input, init);
+  // Never follow /login/?reason=lor2 — that 404 must not become not_found.
+  return fetch(input, { ...init, redirect: "manual" });
+}
+
+function resolveFallbackOrigin(origin: string, options: LiveRedditOptions): string | undefined {
+  if (options.fallbackOrigin === null) {
+    return undefined;
+  }
+  const raw =
+    options.fallbackOrigin ?? (options.origin === undefined ? FALLBACK_REDDIT_ORIGIN : undefined);
+  if (raw === undefined) {
+    return undefined;
+  }
+  const fallback = raw.replace(/\/+$/, "");
+  return fallback === origin ? undefined : fallback;
 }
 
 async function redditGet(
@@ -139,32 +179,75 @@ async function redditGet(
   url: string,
   userAgent: string,
   timeoutMs: number,
+  fallbackOrigin?: string,
 ): Promise<{ ok: true; body: unknown } | AdapterFailure> {
   return limit(async () => {
-    let response: Response;
-    try {
-      response = await fetchFn(url, {
-        method: "GET",
-        headers: {
-          "user-agent": userAgent,
-          accept: "application/json",
-        },
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-    } catch {
-      return fail("upstream_blocked", "Upstream blocked the request.");
+    const urls = requestUrls(url, fallbackOrigin);
+    let last: AdapterFailure | null = null;
+    for (const candidate of urls) {
+      const result = await redditGetOnce(fetchFn, candidate, userAgent, timeoutMs);
+      if (result.ok) {
+        return result;
+      }
+      last = result;
+      if (!shouldRetryOtherOrigin(result)) {
+        return result;
+      }
     }
-
-    const body = await readBody(response);
-    const mapped = mapUpstreamFailure(response, body);
-    if (mapped !== null) {
-      return mapped;
-    }
-    if (body === null) {
-      return fail("upstream_blocked", "Unexpected upstream payload.");
-    }
-    return { ok: true, body };
+    return last ?? fail("upstream_blocked", "Upstream blocked the request.");
   });
+}
+
+async function redditGetOnce(
+  fetchFn: LiveFetch,
+  url: string,
+  userAgent: string,
+  timeoutMs: number,
+): Promise<{ ok: true; body: unknown } | AdapterFailure> {
+  let response: Response;
+  try {
+    response = await fetchFn(url, {
+      method: "GET",
+      headers: {
+        "user-agent": userAgent,
+        accept: "application/json",
+      },
+      redirect: "manual",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch {
+    return fail("upstream_blocked", "Upstream blocked the request.");
+  }
+
+  const body = await readBody(response);
+  const mapped = mapUpstreamFailure(response, body);
+  if (mapped !== null) {
+    return mapped;
+  }
+  if (body === null) {
+    return fail("upstream_blocked", "Unexpected upstream payload.");
+  }
+  return { ok: true, body };
+}
+
+function requestUrls(url: string, fallbackOrigin?: string): string[] {
+  if (fallbackOrigin === undefined) {
+    return [url];
+  }
+  const fallback = rewriteOrigin(url, fallbackOrigin);
+  return fallback === url ? [url] : [url, fallback];
+}
+
+function rewriteOrigin(url: string, origin: string): string {
+  const parsed = new URL(url);
+  const target = new URL(origin);
+  parsed.protocol = target.protocol;
+  parsed.host = target.host;
+  return parsed.toString();
+}
+
+function shouldRetryOtherOrigin(failure: AdapterFailure): boolean {
+  return failure.code === "upstream_blocked" || failure.code === "rate_limited";
 }
 
 function mapUpstreamFailure(response: Response, body: unknown): AdapterFailure | null {
@@ -177,6 +260,10 @@ function mapUpstreamFailure(response: Response, body: unknown): AdapterFailure |
   }
   if (reason === "quarantined") {
     return fail("subreddit_quarantined", "This subreddit is quarantined.");
+  }
+  // Login wall / 403 interstitial / followed lor2 404 — never not_found.
+  if (isLoginWallResponse(response) || isBlockedHtml(response, body, errorCode)) {
+    return fail("upstream_blocked", "Upstream blocked the request.");
   }
   if (reason === "banned" || reason === "banned_by_admin" || response.status === 404 || errorCode === 404) {
     return fail("not_found", "Not found.");
@@ -195,6 +282,42 @@ function mapUpstreamFailure(response: Response, body: unknown): AdapterFailure |
     return fail("upstream_blocked", "Upstream blocked the request.");
   }
   return null;
+}
+
+function isLoginWallResponse(response: Response): boolean {
+  const candidates = [response.url, response.headers.get("location") ?? ""];
+  for (const raw of candidates) {
+    if (raw === "") {
+      continue;
+    }
+    try {
+      const parsed = new URL(raw, response.url !== "" ? response.url : DEFAULT_REDDIT_ORIGIN);
+      if (parsed.searchParams.get("reason") === "lor2") {
+        return true;
+      }
+      const path = parsed.pathname.replace(/\/+$/, "") || "/";
+      if (path === "/login" || path.startsWith("/login/")) {
+        return true;
+      }
+    } catch {
+      if (/reason=lor2/i.test(raw) || /\/login(?:\/|\?|$)/i.test(raw)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function isBlockedHtml(response: Response, body: unknown, errorCode: number | null): boolean {
+  if (body !== null) {
+    return false;
+  }
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!/text\/html/i.test(contentType)) {
+    return false;
+  }
+  // .json asked for JSON; HTML 403/404/200 interstitial is a wall, not a missing post.
+  return response.status === 200 || response.status === 403 || response.status === 404 || errorCode === 403;
 }
 
 async function readBody(response: Response): Promise<unknown> {

@@ -63,7 +63,7 @@ REDDITAPI_USER_AGENT=redditapi/0.1 (+https://your.domain; you@your.domain)
 
 Then `docker restart redditapi`. Confirm `/healthz` still returns `{"ok":true}`, then call `/v1/threads/by-url` with a public permalink.
 
-Do not set `REDDITAPI_LIVE=1` in CI. Private / quarantined / removed / 429 / network failures charge 0 credits. Honor `Retry-After`. Getting banned is an outage, not a growth tactic.
+Do not set `REDDITAPI_LIVE=1` in CI. Private / quarantined / removed / 429 / network failures charge 0 credits. Login-wall (`/login/?reason=lor2`) and 403 HTML are `upstream_blocked`, not `not_found`. Honor `Retry-After`. Getting banned is an outage, not a growth tactic.
 
 ## Data
 
