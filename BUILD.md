@@ -123,3 +123,9 @@ Fixtures: small thread; thread with `more`; deleted child; private sub → 403; 
 - **Files:** src/adapters/reddit/live.ts, src/adapters/reddit/index.ts, src/config.ts, tests/live-adapter.test.ts, scripts/test.sh
 - **Dependencies:** PR 5
 
+### Follow-up: live smoke (operator only)
+- **Description:** `REDDITAPI_LIVE=1` local process walks unroll, post-only, listing, search, and a private/removed case. Record PASS / PASS-ERROR / FAIL. Not required for `main`.
+- **Files:** `scripts/live-smoke.sh`, `docs/live-smoke.md`
+- **Dependencies:** live Reddit adapter
+- **Acceptance:** script is not called from `scripts/test.sh` or Actions. CI must not set `REDDITAPI_LIVE`.
+
