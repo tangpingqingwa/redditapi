@@ -136,9 +136,15 @@ if [[ -f package.json ]]; then
   grep -q 'REDDITAPI_LIVE' src/config.ts || fail "src/config.ts missing REDDITAPI_LIVE"
   grep -q 'liveRedditEnabled' src/adapters/reddit/index.ts || fail "adapter index missing liveRedditEnabled"
   grep -q 'createLiveRedditAdapter' src/adapters/reddit/live.ts || fail "missing createLiveRedditAdapter"
+  grep -q 'js_challenge' src/adapters/reddit/live.ts || fail "live adapter missing JS challenge session"
+  grep -q 'token_v2' src/adapters/reddit/live.ts || fail "live adapter missing token_v2 session cookie"
+  grep -q 'js_challenge' tests/live-adapter.test.ts || fail "tests/live-adapter.test.ts missing JS challenge"
   grep -q 'createAppAdapter' src/app.ts || fail "src/app.ts must select adapter via createAppAdapter"
   if grep -q 'REDDITAPI_LIVE=1' .github/workflows/ci.yml; then
     fail "CI must not set REDDITAPI_LIVE=1"
+  fi
+  if grep -q 'live-smoke' .github/workflows/ci.yml; then
+    fail "CI must not call live-smoke"
   fi
   if grep -qE 'www\.reddit\.com/api|oauth\.reddit\.com' tests/live-adapter.test.ts; then
     fail "tests/live-adapter.test.ts mentions live Reddit hosts"
