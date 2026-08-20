@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
-import { createFixtureAdapter } from "./adapters/reddit/fixture.js";
+import { createAppAdapter } from "./adapters/reddit/index.js";
 import { maybeBootstrapKey } from "./billing/keys.js";
 import type { RedditAdapter } from "./core/thread.js";
 import { openDatabase, type SqliteDatabase } from "./db.js";
@@ -31,7 +31,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   if (options.db === undefined) {
     maybeBootstrapKey(db, options.bootstrapKey);
   }
-  const reddit = options.reddit ?? createFixtureAdapter();
+  const reddit = options.reddit ?? createAppAdapter();
 
   app.decorate("sqlite", db);
   app.addHook("onClose", async () => {

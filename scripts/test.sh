@@ -63,7 +63,9 @@ if [[ -f package.json ]]; then
     src/core/search.ts src/http/routes/search.ts \
     src/mcp/server.ts src/mcp/tools.ts llms.txt \
     src/views/home.ts src/views/thread.ts src/views/layout.ts src/views/legal.ts \
-    public/unroller.css public/unroller.js; do
+    public/unroller.css public/unroller.js \
+    src/adapters/reddit/live.ts src/adapters/reddit/index.ts \
+    tests/live-adapter.test.ts; do
     [[ -f "$f" ]] || fail "missing $f"
     [[ -s "$f" ]] || fail "empty $f"
   done
@@ -113,16 +115,31 @@ if [[ -f package.json ]]; then
     fail "src/mcp must not call fetch"
   fi
 
-  echo "== offline adapters only =="
-  if grep -R --include='*.ts' -nE '\bfetch\s*\(' src; then
-    fail "src/ must not call fetch (fixture adapter only)"
+  echo "== live adapter is env-gated and not in CI =="
+  grep -q 'REDDITAPI_LIVE' src/config.ts || fail "src/config.ts missing REDDITAPI_LIVE"
+  grep -q 'liveRedditEnabled' src/adapters/reddit/index.ts || fail "adapter index missing liveRedditEnabled"
+  grep -q 'createLiveRedditAdapter' src/adapters/reddit/live.ts || fail "missing createLiveRedditAdapter"
+  grep -q 'createAppAdapter' src/app.ts || fail "src/app.ts must select adapter via createAppAdapter"
+  if grep -q 'REDDITAPI_LIVE=1' .github/workflows/ci.yml; then
+    fail "CI must not set REDDITAPI_LIVE=1"
+  fi
+  if grep -qE 'www\.reddit\.com/api|oauth\.reddit\.com' tests/live-adapter.test.ts; then
+    fail "tests/live-adapter.test.ts mentions live Reddit hosts"
+  fi
+  if grep -R --include='*.ts' -nE '\bfetch\s*\(' src/core src/http src/mcp src/adapters/reddit/fixture.ts; then
+    fail "core/http/mcp/fixture must not call fetch"
   fi
   if grep -R --include='*.ts' -nE "from ['\"]undici['\"]|from ['\"]node:https?['\"]" src; then
-    fail "src/ must not import an HTTP client yet"
+    fail "src/ must not import undici or node:http"
+  fi
+  if ! grep -nE '\bfetch\s*\(' src/adapters/reddit/live.ts >/dev/null; then
+    fail "live adapter must implement fetch"
   fi
 
   echo "== unit tests =="
   # Quoted so bash 3.2 does not eat **; Node 22's test runner expands the glob.
+  # Fixture / mocked fetch only — never hit live Reddit.
+  unset REDDITAPI_LIVE || true
   set +e
   output="$(npx tsx --test 'tests/**/*.test.ts' 2>&1)"
   status=$?

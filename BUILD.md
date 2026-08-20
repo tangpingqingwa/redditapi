@@ -118,4 +118,8 @@ Fixtures: small thread; thread with `more`; deleted child; private sub → 403; 
 - **Files:** core/search.ts, src/mcp/*, tests
 - **Dependencies:** PR 4
 
-Live adapter is a follow-up PR after fixtures are on main.
+### Follow-up: live Reddit adapter
+- **Description:** Env-gated `old.reddit` JSON adapter. Default remains fixtures. `REDDITAPI_LIVE=1` selects live. Failures map to SPEC codes and charge 0. Not required in CI.
+- **Files:** src/adapters/reddit/live.ts, src/adapters/reddit/index.ts, src/config.ts, tests/live-adapter.test.ts, scripts/test.sh
+- **Dependencies:** PR 5
+
