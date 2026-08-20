@@ -37,6 +37,23 @@ echo "== markdown is UTF-8 text =="
 file -b --mime-encoding README.md SPEC.md CONTRIBUTING.md | grep -qiE 'utf-8|us-ascii' \
   || fail "docs are not UTF-8/ASCII"
 
+echo "== deploy artifacts =="
+for f in Dockerfile .env.example deploy/runbook.md; do
+  [[ -f "$f" ]] || fail "missing $f"
+  [[ -s "$f" ]] || fail "empty $f"
+done
+grep -qE '^FROM node:22' Dockerfile || fail "Dockerfile must start from Node 22"
+grep -qE '^USER ' Dockerfile || fail "Dockerfile must run as non-root"
+grep -q 'PORT' Dockerfile || fail "Dockerfile must mention PORT"
+if grep -E '^[[:space:]]*ENV[[:space:]].*REDDITAPI_LIVE=1' Dockerfile >/dev/null; then
+  fail "Dockerfile must not enable live Reddit"
+fi
+grep -q 'REDDITAPI_LIVE' .env.example || fail ".env.example missing REDDITAPI_LIVE"
+grep -q 'REDDITAPI_DATABASE' .env.example || fail ".env.example missing REDDITAPI_DATABASE"
+grep -q 'REDDITAPI_BOOTSTRAP_KEY' .env.example || fail ".env.example missing REDDITAPI_BOOTSTRAP_KEY"
+grep -q '/healthz' deploy/runbook.md || fail "runbook missing /healthz"
+grep -q 'REDDITAPI_LIVE=1' deploy/runbook.md || fail "runbook missing how to enable live"
+
 if [[ -f package.json ]]; then
   echo "== install =="
   if [[ ! -d node_modules ]]; then
