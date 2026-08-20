@@ -2,7 +2,7 @@
 
 Operator-only. `bash scripts/live-smoke.sh` is **not** called from `scripts/test.sh` or GitHub Actions. `REDDITAPI_LIVE` stays unset in CI.
 
-Ran this session against a local process with `REDDITAPI_LIVE=1` (temp SQLite + bootstrap `rk_test_live_smoke_local`). Egress was this machine’s public IP. The live adapter now tries `old.reddit.com` JSON first, then `www.reddit.com` JSON with the documented User-Agent. Redirects are not followed into `/login`.
+Ran this session against a local process with `REDDITAPI_LIVE=1` (temp SQLite + bootstrap `rk_test_live_smoke_local`). Egress was this machine’s public IP. The live adapter still tries `old.reddit.com` JSON first, then `www.reddit.com` JSON. Redirects are not followed into `/login`. A www HTML wall is treated as a public JS challenge: the adapter solves `e+e`, stores `token_v2`, and retries JSON.
 
 | Field | Value |
 |---|---|
@@ -17,31 +17,35 @@ Ran this session against a local process with `REDDITAPI_LIVE=1` (temp SQLite + 
 
 | case | verdict | detail |
 |---|---|---|
-| unroll public thread | FAIL | `GET /v1/threads/by-url` for `https://www.reddit.com/r/pics/comments/92dd8/test_post_please_ignore/` → HTTP 503 `upstream_blocked`, `creditsCharged=0` |
-| GET post-only | FAIL | `GET /v1/posts/92dd8` → HTTP 503 `upstream_blocked`, `creditsCharged=0` |
-| sub listing | FAIL | `GET /v1/r/pics/hot?limit=5` → HTTP 503 `upstream_blocked`, `creditsCharged=0` |
-| search | FAIL | `GET /v1/search?q=cats&limit=5` → HTTP 503 `upstream_blocked`, `creditsCharged=0` |
-| private or gated sub | PASS-ERROR | `GET /v1/r/lounge/hot?limit=5` → HTTP 503 `upstream_blocked`, `creditsCharged=0` |
-| removed or missing post | PASS-ERROR | `GET /v1/posts/thispostdoesnotexist999` → HTTP 503 `upstream_blocked`, `creditsCharged=0` |
+| unroll public thread | PASS | `GET /v1/threads/by-url` for `https://www.reddit.com/r/pics/comments/92dd8/test_post_please_ignore/` → HTTP 200, `post=t3_92dd8`, title `test post please ignore`, `comments=50`, `creditsCharged=1`. First comment `t1_c0b6xx0` author `Kharos`, body starts `Don't tell me what to do!` |
+| GET post-only | PASS | `GET /v1/posts/92dd8` → HTTP 200, `id=t3_92dd8`, title `test post please ignore`, `creditsCharged=1`, no comments field |
+| sub listing | PASS | `GET /v1/r/pics/hot?limit=5` → HTTP 200, `posts=5`, first `t3_1vt0u4g` title `You can cover your faces, we can still tell you’re pigs! [OC]`, `creditsCharged=1` |
+| search | PASS | `GET /v1/search?q=cats&limit=5` → HTTP 200, `hits=5`, first `t3_1smpzom` title `Children and cats`, `creditsCharged=1` |
+| private or gated sub | PASS-ERROR | `GET /v1/r/lounge/hot?limit=5` → HTTP 403 `subreddit_private`, `creditsCharged=0` (`gold_only` JSON after session) |
+| removed or missing post | PASS-ERROR | `GET /v1/posts/thispostdoesnotexist999` → HTTP 404 `not_found`, `creditsCharged=0` (JSON `{ "error": 404 }`) |
 
-**Totals:** PASS=0 PASS-ERROR=2 FAIL=4  
-**RESULT: FAIL**
+**Totals:** PASS=4 PASS-ERROR=2 FAIL=0  
+**RESULT: PASS**
 
-This host cannot complete a real public unroll or listing/search. Do not treat the error-path rows as a live PASS.
+Titles and comment text above were returned by Reddit on this run. Nothing was invented.
 
 ## What the process actually saw
 
-Direct probes from this host (same UA) after the adapter fix:
+Direct probes from this host (same UA) before the JS-challenge session:
 
 - `old.reddit.com/...json` → HTTP 302 `Location: /login/?reason=lor2` (login wall, empty body). Adapter does **not** follow that redirect.
-- `www.reddit.com/.json` and thread/listing/search `.json` → HTTP 403 HTML interstitial (`text/html`, ~190k). Same with a browser-like User-Agent.
-- Node `fetch` to `www.reddit.com/.json` (manual and follow) is also 403 HTML. No public JSON body.
+- Bare `www.reddit.com/.json` (no session) → HTTP 403 HTML interstitial (`text/html`, ~190k).
+- `GET https://www.reddit.com/` HTML includes a `js_challenge` form (`await (async e=>e+e)("…")` + hidden `token`). Completing it sets `token_v2`. Retrying `.json` then returns public JSON.
 
-The adapter maps login-wall / 403 HTML / `lor2` to SPEC `upstream_blocked` and charges 0. It does **not** map those to `not_found`. Success paths never produced a post title or comment tree. Nothing was invented.
+After the session:
 
-A true missing listing (JSON `{ "error": 404 }`) still maps to `not_found` in offline tests. This egress never received that JSON from Reddit, so the live missing-post case is also `upstream_blocked`.
+- Thread JSON for `t3_92dd8` → HTTP 200, title `test post please ignore`.
+- Listing JSON `/r/pics/hot.json` → HTTP 200, first title as in the table.
+- Search JSON `q=cats` → HTTP 200, first title `Children and cats`.
+- `/r/lounge/hot.json` → HTTP 403 JSON `{ "reason": "gold_only", "error": 403 }` → SPEC `subreddit_private`, 0 credits.
+- Missing post JSON → HTTP 404 `{ "error": 404 }` → SPEC `not_found`, 0 credits.
 
-Private / missing cases still satisfied the error half of the unit: SPEC code, `meta.creditsCharged: 0`. Required public reads did not PASS.
+Login-wall / 403 HTML / `lor2` still map to `upstream_blocked`, never `not_found`, never invented comments. A true missing listing (JSON `{ "error": 404 }`) stays `not_found`.
 
 ## Re-run
 

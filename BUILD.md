@@ -119,7 +119,7 @@ Fixtures: small thread; thread with `more`; deleted child; private sub → 403; 
 - **Dependencies:** PR 4
 
 ### Follow-up: live Reddit adapter
-- **Description:** Env-gated public JSON adapter. Tries `old.reddit` then `www.reddit.com/.json`. Default remains fixtures. `REDDITAPI_LIVE=1` selects live. Login-wall / 403 HTML / `lor2` map to `upstream_blocked` (never `not_found`, never invented comments). Other failures map to SPEC codes and charge 0. Not required in CI.
+- **Description:** Env-gated public JSON adapter. Tries `old.reddit` then `www.reddit.com/.json`. Default remains fixtures. `REDDITAPI_LIVE=1` selects live. Login-wall / 403 HTML / `lor2` map to `upstream_blocked` (never `not_found`, never invented comments). After a www HTML wall, complete Reddit’s public JS challenge, keep `token_v2`, and retry JSON. Other failures map to SPEC codes and charge 0. Not required in CI.
 - **Files:** src/adapters/reddit/live.ts, src/adapters/reddit/index.ts, src/config.ts, tests/live-adapter.test.ts, scripts/test.sh
 - **Dependencies:** PR 5
 

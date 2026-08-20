@@ -37,6 +37,8 @@ export type LiveRedditOptions = {
   concurrency?: number;
 };
 
+type CookieJar = Map<string, string>;
+
 export function createLiveRedditAdapter(options: LiveRedditOptions = {}): RedditAdapter {
   const origin = (options.origin ?? DEFAULT_REDDIT_ORIGIN).replace(/\/+$/, "");
   const fallbackOrigin = resolveFallbackOrigin(origin, options);
@@ -44,6 +46,8 @@ export function createLiveRedditAdapter(options: LiveRedditOptions = {}): Reddit
   const timeoutMs = options.timeoutMs ?? LIVE_TIMEOUT_MS;
   const fetchFn = options.fetch ?? defaultFetch;
   const limit = createLimiter(options.concurrency ?? LIVE_CONCURRENCY);
+  const cookies: CookieJar = new Map();
+  const warmup: { current: Promise<boolean> | null } = { current: null };
 
   return {
     async fetchThread(ref: ThreadRef, sort: ThreadSort): Promise<AdapterThreadOk | AdapterFailure> {
@@ -54,6 +58,8 @@ export function createLiveRedditAdapter(options: LiveRedditOptions = {}): Reddit
         `${origin}${threadPath(ref)}.json?${params}`,
         userAgent,
         timeoutMs,
+        cookies,
+        warmup,
         fallbackOrigin,
       );
       if (!result.ok) {
@@ -87,6 +93,8 @@ export function createLiveRedditAdapter(options: LiveRedditOptions = {}): Reddit
         `${origin}/api/morechildren?${params}`,
         userAgent,
         timeoutMs,
+        cookies,
+        warmup,
         fallbackOrigin,
       );
       if (!result.ok) {
@@ -110,6 +118,8 @@ export function createLiveRedditAdapter(options: LiveRedditOptions = {}): Reddit
         `${origin}/r/${encodeURIComponent(input.subreddit)}/${sortPath}.json?${params}`,
         userAgent,
         timeoutMs,
+        cookies,
+        warmup,
         fallbackOrigin,
       );
       if (!result.ok) {
@@ -142,6 +152,8 @@ export function createLiveRedditAdapter(options: LiveRedditOptions = {}): Reddit
         `${origin}${path}?${params}`,
         userAgent,
         timeoutMs,
+        cookies,
+        warmup,
         fallbackOrigin,
       );
       if (!result.ok) {
@@ -179,15 +191,26 @@ async function redditGet(
   url: string,
   userAgent: string,
   timeoutMs: number,
+  cookies: CookieJar,
+  warmup: { current: Promise<boolean> | null },
   fallbackOrigin?: string,
 ): Promise<{ ok: true; body: unknown } | AdapterFailure> {
   return limit(async () => {
     const urls = requestUrls(url, fallbackOrigin);
     let last: AdapterFailure | null = null;
     for (const candidate of urls) {
-      const result = await redditGetOnce(fetchFn, candidate, userAgent, timeoutMs);
+      let result = await redditGetOnce(fetchFn, candidate, userAgent, timeoutMs, cookies);
       if (result.ok) {
         return result;
+      }
+      if (result.code === "upstream_blocked" && allowsPublicSession(candidate) && !cookies.has("token_v2")) {
+        const authed = await ensurePublicSession(warmup, fetchFn, sessionOrigin(candidate), userAgent, timeoutMs, cookies);
+        if (authed) {
+          result = await redditGetOnce(fetchFn, candidate, userAgent, timeoutMs, cookies);
+          if (result.ok) {
+            return result;
+          }
+        }
       }
       last = result;
       if (!shouldRetryOtherOrigin(result)) {
@@ -203,19 +226,12 @@ async function redditGetOnce(
   url: string,
   userAgent: string,
   timeoutMs: number,
+  cookies: CookieJar,
 ): Promise<{ ok: true; body: unknown } | AdapterFailure> {
-  let response: Response;
-  try {
-    response = await fetchFn(url, {
-      method: "GET",
-      headers: {
-        "user-agent": userAgent,
-        accept: "application/json",
-      },
-      redirect: "manual",
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-  } catch {
+  const response = await liveFetch(fetchFn, url, userAgent, timeoutMs, cookies, {
+    accept: "application/json",
+  });
+  if (response === null) {
     return fail("upstream_blocked", "Upstream blocked the request.");
   }
 
@@ -228,6 +244,188 @@ async function redditGetOnce(
     return fail("upstream_blocked", "Unexpected upstream payload.");
   }
   return { ok: true, body };
+}
+
+function ensurePublicSession(
+  warmup: { current: Promise<boolean> | null },
+  fetchFn: LiveFetch,
+  origin: string,
+  userAgent: string,
+  timeoutMs: number,
+  cookies: CookieJar,
+): Promise<boolean> {
+  if (cookies.has("token_v2")) {
+    return Promise.resolve(true);
+  }
+  if (warmup.current !== null) {
+    return warmup.current;
+  }
+  const pending = completeJsChallenge(fetchFn, origin, userAgent, timeoutMs, cookies).then(
+    (ok) => {
+      if (!ok && warmup.current === pending) {
+        warmup.current = null;
+      }
+      return ok;
+    },
+    () => {
+      if (warmup.current === pending) {
+        warmup.current = null;
+      }
+      return false;
+    },
+  );
+  warmup.current = pending;
+  return pending;
+}
+
+async function completeJsChallenge(
+  fetchFn: LiveFetch,
+  origin: string,
+  userAgent: string,
+  timeoutMs: number,
+  cookies: CookieJar,
+): Promise<boolean> {
+  const pageUrl = `${origin}/`;
+  const page = await liveFetch(fetchFn, pageUrl, userAgent, timeoutMs, cookies, {
+    accept: "text/html",
+  });
+  if (page === null || isLoginWallResponse(page)) {
+    return false;
+  }
+  let html: string;
+  try {
+    html = await page.text();
+  } catch {
+    return false;
+  }
+  const challenge = parseJsChallenge(html);
+  if (challenge === null) {
+    return false;
+  }
+  const dest = new URL(challenge.action, pageUrl);
+  dest.searchParams.set("solution", challenge.solution);
+  dest.searchParams.set("js_challenge", "1");
+  dest.searchParams.set("token", challenge.token);
+  dest.searchParams.set("jsc_orig_r", challenge.jscOrigR);
+  const solved = await liveFetch(fetchFn, dest.toString(), userAgent, timeoutMs, cookies, {
+    accept: "text/html",
+    referer: pageUrl,
+  });
+  if (solved === null || isLoginWallResponse(solved)) {
+    return false;
+  }
+  try {
+    await solved.text();
+  } catch {
+    return false;
+  }
+  return cookies.has("token_v2");
+}
+
+function parseJsChallenge(html: string): { action: string; token: string; solution: string; jscOrigR: string } | null {
+  if (!/js_challenge/i.test(html)) {
+    return null;
+  }
+  const doubled = html.match(/await\(\s*async\s+e\s*=>\s*e\s*\+\s*e\s*\)\s*\(\s*"([0-9a-f]+)"\s*\)/i);
+  const token = html.match(/name="token"\s+value="([^"]+)"/i);
+  const action =
+    html.match(/<form[^>]*method="GET"[^>]*action="([^"]*)"/i) ??
+    html.match(/<form[^>]*action="([^"]*)"[^>]*method="GET"/i);
+  if (doubled === null || token === null || action === null) {
+    return null;
+  }
+  const orig = html.match(/name="jsc_orig_r"\s+value="([^"]*)"/i);
+  return {
+    action: action[1] === "" ? "/" : action[1],
+    token: token[1],
+    solution: `${doubled[1]}${doubled[1]}`,
+    jscOrigR: orig?.[1] ?? "",
+  };
+}
+
+async function liveFetch(
+  fetchFn: LiveFetch,
+  url: string,
+  userAgent: string,
+  timeoutMs: number,
+  cookies: CookieJar,
+  extraHeaders: Record<string, string>,
+): Promise<Response | null> {
+  const headers: Record<string, string> = {
+    "user-agent": userAgent,
+    ...extraHeaders,
+  };
+  const cookie = cookieHeader(cookies);
+  if (cookie !== "") {
+    headers.cookie = cookie;
+  }
+  let response: Response;
+  try {
+    response = await fetchFn(url, {
+      method: "GET",
+      headers,
+      redirect: "manual",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch {
+    return null;
+  }
+  applySetCookie(cookies, response);
+  return response;
+}
+
+function cookieHeader(cookies: CookieJar): string {
+  if (cookies.size === 0) {
+    return "";
+  }
+  return [...cookies.entries()].map(([name, value]) => `${name}=${value}`).join("; ");
+}
+
+function applySetCookie(cookies: CookieJar, response: Response): void {
+  const raw = readSetCookie(response);
+  for (const header of raw) {
+    const nv = header.split(";")[0] ?? "";
+    const eq = nv.indexOf("=");
+    if (eq <= 0) {
+      continue;
+    }
+    const name = nv.slice(0, eq).trim();
+    const value = nv.slice(eq + 1);
+    if (name === "") {
+      continue;
+    }
+    if (value === "" || /(?:^|;)\s*max-age=0(?:;|$)/i.test(header) || /expires=thu,\s*01 jan 1970/i.test(header)) {
+      cookies.delete(name);
+      continue;
+    }
+    cookies.set(name, value);
+  }
+}
+
+function readSetCookie(response: Response): string[] {
+  const headers = response.headers;
+  if (typeof headers.getSetCookie === "function") {
+    const listed = headers.getSetCookie();
+    if (listed.length > 0) {
+      return listed;
+    }
+  }
+  const single = headers.get("set-cookie");
+  return single === null || single === "" ? [] : [single];
+}
+
+function allowsPublicSession(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return host === "www.reddit.com" || host === "reddit.com";
+  } catch {
+    return false;
+  }
+}
+
+function sessionOrigin(url: string): string {
+  const parsed = new URL(url);
+  return `${parsed.protocol}//${parsed.host}`;
 }
 
 function requestUrls(url: string, fallbackOrigin?: string): string[] {

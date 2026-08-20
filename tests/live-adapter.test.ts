@@ -430,6 +430,216 @@ test("lor2 on old.reddit falls back to www.reddit.com JSON", async () => {
   assert.ok(seen.some((u) => u.startsWith("https://www.reddit.com")));
 });
 
+const JS_CHALLENGE_HTML = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Reddit</title>
+    <script>
+      document.addEventListener("DOMContentLoaded",async function(){
+        var e=document.forms[0],n=(e.onsubmit=function(){return!0},await(async e=>e+e)("deadbeef"));
+        e.elements.namedItem("solution").value=n,e.requestSubmit();
+      },{once:!0});
+    </script>
+  </head>
+  <body>
+    <form hidden method="GET" action="/">
+      <input type="hidden" name="solution" />
+      <input type="hidden" name="js_challenge" value="1"/>
+      <input type="hidden" name="token" value="tok123"/>
+      <input type="hidden" name="jsc_orig_r" value=""/>
+    </form>
+  </body>
+</html>`;
+
+function cookieMap(header: string | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (header === undefined || header === "") {
+    return out;
+  }
+  for (const part of header.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq <= 0) {
+      continue;
+    }
+    out[part.slice(0, eq).trim()] = part.slice(eq + 1).trim();
+  }
+  return out;
+}
+
+test("www 403 HTML then JS challenge retries JSON with session cookie", async () => {
+  const seen: string[] = [];
+  const adapter = createLiveRedditAdapter({
+    origin: "https://www.reddit.com",
+    fallbackOrigin: null,
+    fetch: async (input, init) => {
+      const url = new URL(input);
+      const cookies = cookieMap(init?.headers?.cookie);
+      seen.push(`${url.pathname}${url.search}`);
+      if (url.pathname.includes("/comments/92dd8") && url.pathname.endsWith(".json")) {
+        if (cookies.token_v2 === "sess") {
+          return jsonResponse(200, [
+            { kind: "Listing", data: { children: [listingThing("92dd8", "test post please ignore")] } },
+            { kind: "Listing", data: { children: [] } },
+          ]);
+        }
+        return textResponse(403, "<html><body class=theme-beta>blocked</body></html>", {
+          "content-type": "text/html",
+        });
+      }
+      if (url.pathname === "/" && url.searchParams.get("js_challenge") === "1") {
+        assert.equal(url.searchParams.get("solution"), "deadbeefdeadbeef");
+        assert.equal(url.searchParams.get("token"), "tok123");
+        return textResponse(200, "<html><title>Reddit</title></html>", {
+          "content-type": "text/html",
+          "set-cookie": "token_v2=sess; Path=/; Domain=reddit.com; HttpOnly",
+        });
+      }
+      if (url.pathname === "/" || url.pathname === "") {
+        return textResponse(200, JS_CHALLENGE_HTML, { "content-type": "text/html" });
+      }
+      throw new Error(`unexpected live url ${url.href}`);
+    },
+  });
+
+  const result = await unrollThread(adapter, {
+    url: "https://www.reddit.com/r/pics/comments/92dd8/test_post_please_ignore/",
+    maxComments: 50,
+    sort: "best",
+  });
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  assert.equal(result.data.post.title, "test post please ignore");
+  assert.equal(result.data.post.id, "t3_92dd8");
+  assert.ok(seen.some((p) => p.includes("/comments/92dd8")));
+  assert.ok(seen.some((p) => p.includes("js_challenge=1")));
+});
+
+test("lor2 then www 403 HTML completes JS challenge before listing JSON", async () => {
+  const adapter = createLiveRedditAdapter({
+    fetch: async (input, init) => {
+      const url = new URL(input);
+      const cookies = cookieMap(init?.headers?.cookie);
+      if (url.hostname === "old.reddit.com") {
+        return textResponse(302, "", {
+          location: `https://old.reddit.com/login/?reason=lor2&dest=${encodeURIComponent(url.href)}`,
+        });
+      }
+      if (url.pathname === "/r/pics/hot.json") {
+        if (cookies.token_v2 === "sess") {
+          return jsonResponse(200, {
+            kind: "Listing",
+            data: { after: null, children: [listingThing("hot1", "A live listing title")] },
+          });
+        }
+        return textResponse(403, "<html><body class=theme-beta>blocked</body></html>", {
+          "content-type": "text/html",
+        });
+      }
+      if (url.pathname === "/" && url.searchParams.get("js_challenge") === "1") {
+        return textResponse(200, "<html></html>", {
+          "content-type": "text/html",
+          "set-cookie": "token_v2=sess; Path=/",
+        });
+      }
+      if (url.pathname === "/" || url.pathname === "") {
+        return textResponse(200, JS_CHALLENGE_HTML, { "content-type": "text/html" });
+      }
+      throw new Error(`unexpected live url ${url.href}`);
+    },
+  });
+
+  const listing = await adapter.fetchListing({ subreddit: "pics", sort: "hot", limit: 5 });
+  assert.equal(listing.ok, true);
+  if (!listing.ok) {
+    return;
+  }
+  const record = listing.listing as { data: { children: Array<{ data: { title: string } }> } };
+  assert.equal(record.data.children[0]?.data.title, "A live listing title");
+});
+
+test("JS challenge that yields no session still maps 403 HTML to upstream_blocked", async () => {
+  const adapter = createLiveRedditAdapter({
+    origin: "https://www.reddit.com",
+    fallbackOrigin: null,
+    fetch: mockFetch((url) => {
+      if (url.pathname === "/" && url.search === "") {
+        return { status: 200, text: JS_CHALLENGE_HTML, headers: { "content-type": "text/html" } };
+      }
+      if (url.searchParams.get("js_challenge") === "1") {
+        return { status: 200, text: "<html>no cookie</html>", headers: { "content-type": "text/html" } };
+      }
+      return {
+        status: 403,
+        text: "<html><body class=theme-beta>blocked</body></html>",
+        headers: { "content-type": "text/html" },
+      };
+    }),
+  });
+  const search = await adapter.fetchSearch({ q: "cats", sort: "relevance", limit: 5 });
+  assert.equal(search.ok, false);
+  if (search.ok) {
+    return;
+  }
+  assert.equal(search.code, "upstream_blocked");
+});
+
+test("after JS session, JSON 404 stays not_found and gold_only stays private", async () => {
+  const adapter = createLiveRedditAdapter({
+    origin: "https://www.reddit.com",
+    fallbackOrigin: null,
+    fetch: async (input, init) => {
+      const url = new URL(input);
+      const cookies = cookieMap(init?.headers?.cookie);
+      if (url.pathname.includes("/comments/gone1") && url.pathname.endsWith(".json")) {
+        if (cookies.token_v2 === "sess") {
+          return jsonResponse(404, { error: 404, message: "Not Found" });
+        }
+        return textResponse(403, "<html><body class=theme-beta>blocked</body></html>", {
+          "content-type": "text/html",
+        });
+      }
+      if (url.pathname === "/r/lounge/hot.json") {
+        if (cookies.token_v2 === "sess") {
+          return jsonResponse(403, { reason: "gold_only", message: "Forbidden", error: 403 });
+        }
+        return textResponse(403, "<html><body class=theme-beta>blocked</body></html>", {
+          "content-type": "text/html",
+        });
+      }
+      if (url.pathname === "/" && url.searchParams.get("js_challenge") === "1") {
+        return textResponse(200, "<html></html>", {
+          "content-type": "text/html",
+          "set-cookie": "token_v2=sess; Path=/",
+        });
+      }
+      if (url.pathname === "/" || url.pathname === "") {
+        return textResponse(200, JS_CHALLENGE_HTML, { "content-type": "text/html" });
+      }
+      throw new Error(`unexpected live url ${url.href}`);
+    },
+  });
+
+  const missing = await unrollThread(adapter, {
+    url: "https://www.reddit.com/r/test/comments/gone1/removed/",
+    maxComments: 50,
+    sort: "best",
+  });
+  assert.equal(missing.ok, false);
+  if (missing.ok) {
+    return;
+  }
+  assert.equal(missing.code, "not_found");
+
+  const lounge = await adapter.fetchListing({ subreddit: "lounge", sort: "hot", limit: 5 });
+  assert.equal(lounge.ok, false);
+  if (lounge.ok) {
+    return;
+  }
+  assert.equal(lounge.code, "subreddit_private");
+});
+
 test("JSON 404 stays not_found after a real missing listing", async () => {
   const adapter = createLiveRedditAdapter({
     fallbackOrigin: null,
