@@ -136,6 +136,27 @@ if [[ -f package.json ]]; then
     fail "live adapter must implement fetch"
   fi
 
+  echo "== deploy artifacts (Dockerfile + runbook) =="
+  [[ -f Dockerfile ]] || fail "missing Dockerfile"
+  [[ -f .env.example ]] || fail "missing .env.example"
+  [[ -f docs/runbook.md ]] || fail "missing docs/runbook.md"
+  grep -q 'node:22' Dockerfile || fail "Dockerfile must use Node 22"
+  grep -qE '^USER[[:space:]]+node$' Dockerfile || fail "Dockerfile must run as non-root USER node"
+  grep -q 'PORT' Dockerfile || fail "Dockerfile must honor PORT"
+  if grep -E 'REDDITAPI_LIVE[[:space:]]*=[[:space:]]*1' Dockerfile >/dev/null; then
+    fail "Dockerfile must not enable live Reddit"
+  fi
+  grep -q 'REDDITAPI_LIVE' .env.example || fail ".env.example missing REDDITAPI_LIVE"
+  grep -q 'REDDITAPI_DATABASE' .env.example || fail ".env.example missing REDDITAPI_DATABASE"
+  grep -q 'REDDITAPI_BOOTSTRAP_KEY' .env.example || fail ".env.example missing REDDITAPI_BOOTSTRAP_KEY"
+  grep -q '/healthz' docs/runbook.md || fail "runbook missing /healthz"
+  grep -q 'REDDITAPI_LIVE=1' docs/runbook.md || fail "runbook missing live Reddit enablement"
+  grep -q 'docker build' docs/runbook.md || fail "runbook missing docker build"
+  grep -q 'docker run' docs/runbook.md || fail "runbook missing docker run"
+  if grep -qE 'www\.reddit\.com/api|oauth\.reddit\.com' Dockerfile .env.example docs/runbook.md; then
+    fail "deploy artifacts must not pin oauth.reddit or www.reddit.com/api"
+  fi
+
   echo "== unit tests =="
   # Quoted so bash 3.2 does not eat **; Node 22's test runner expands the glob.
   # Fixture / mocked fetch only — never hit live Reddit.

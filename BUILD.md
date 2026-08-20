@@ -123,3 +123,9 @@ Fixtures: small thread; thread with `more`; deleted child; private sub → 403; 
 - **Files:** src/adapters/reddit/live.ts, src/adapters/reddit/index.ts, src/config.ts, tests/live-adapter.test.ts, scripts/test.sh
 - **Dependencies:** PR 5
 
+### Follow-up: Dockerfile + one-box runbook
+- **Description:** One-VPS image and operator runbook. Node 22, non-root, listen on `$PORT`. Live Reddit stays off until the operator sets `REDDITAPI_LIVE=1`. CI stays offline.
+- **Files:** `Dockerfile`, `.env.example`, `docs/runbook.md`, `.dockerignore`
+- **Dependencies:** live Reddit adapter
+- **Acceptance:** `bash scripts/test.sh` remains green with no Docker daemon and no live Reddit.
+
